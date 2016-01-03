@@ -6,8 +6,7 @@
 namespace slam {
 
 cv::Mat estimate_fundamental_matrix(const PointVector& pts_1, const PointVector& pts_2,
-                                    std::vector<uchar>& inliers) {
-  // PointVector inlier_mask;
+                                    StatusVector& inliers) {
   cv::Mat F;
   F = cv::findFundamentalMat(pts_1, pts_2, cv::FM_RANSAC, 2, 0.999, inliers);
   return cv::Mat_<float>(F);
@@ -47,20 +46,21 @@ cv::Mat deskew(const cv::Mat T) {
   return t;
 }
 
-void triangulate(const cv::Mat pose_1, const cv::Mat pose_2, const cv::Mat K,
-                 const PointVector& pts_1, const PointVector& pts_2, Point3Vector& triangulated) {
-  //
-  // cv::Mat identity = cv::Mat::eye(3, 4, CV_32F);
-  cv::Mat proj_1 = cv::Mat_<float>(K * pose_1);
-  cv::Mat proj_2 = cv::Mat_<float>(K * pose_2);
+void triangulate(const Pose& pose_1, const Pose& pose_2, const cv::Mat K, const PointVector& pts_1,
+                 const PointVector& pts_2, Point3Vector& triangulated) {
+  cv::Mat mat_pose_1, mat_pose_2;
+  cv::hconcat(pose_1.rotation, pose_1.translation, mat_pose_1);
+  cv::hconcat(pose_2.rotation, pose_2.translation, mat_pose_2);
+  cv::Mat proj_1 = cv::Mat_<float>(K * mat_pose_1);
+  cv::Mat proj_2 = cv::Mat_<float>(K * mat_pose_2);
   cv::Mat output_pts = cv::Mat(4, pts_2.size(), CV_32F);
   cv::triangulatePoints(proj_1, proj_2, pts_1, pts_2, output_pts);
   // cv::convertPointsFromHomogeneous(output_pts, triangulated);
   convert_from_homogeneous4d(output_pts, triangulated);
 }
 
-cv::Mat estimate_motion(const PointVector& pts_1, const PointVector& pts_2, const cv::Mat& F,
-                        const cv::Mat& K) {
+Pose estimate_motion(const PointVector& pts_1, const PointVector& pts_2, const cv::Mat& F,
+                     const cv::Mat& K) {
   /*
     TODO: Points3Vector bootstrap(pts_1, pts_2, F, cv::Mat K)
     F: Fundamental matrix
@@ -68,13 +68,11 @@ cv::Mat estimate_motion(const PointVector& pts_1, const PointVector& pts_2, cons
   */
 
   // Essential matrix
-  // cv::Mat_<double>(
   cv::Mat E = K.t() * F * K;
-  // cv::Mat E = cv::Mat_<double>(K.t()) * cv::Mat_<double>(F) * cv::Mat_<double>(K);
 
   cv::Mat W = (cv::Mat_<float>(3, 3) << 0, -1, 0, 1, 0, 0, 0, 0, 1);
   cv::Mat Z = (cv::Mat_<float>(3, 3) << 0, 1, 0, -1, 0, 0, 0, 0, 0);
-  cv::Mat pose, R, T_skew, t;                     // Motion candidates
+  cv::Mat pose, R1, R2, T_skew, t;                // Motion candidates
   cv::Mat U, S, V_t;                              // SVD
   cv::Mat identity = cv::Mat::eye(3, 4, CV_32F);  // Initial pose
 
@@ -92,49 +90,60 @@ cv::Mat estimate_motion(const PointVector& pts_1, const PointVector& pts_2, cons
 
   int best_count = 0;
   int current_count = 0;
-  // cv::Mat best_translation, best_rotation;
-  cv::Mat best_pose;
+  Pose best_pose;
   // Explicitly test for the transform with the best front-ness
 
-  R = U * W.t() * V_t;
-  cv::hconcat(R, t, pose);
+  R1 = U * W.t() * V_t;
+  cv::hconcat(R1, t, pose);
   current_count = num_in_front(identity, pose, K, pts_1, pts_2);
   // Don't have to check if this is the best
-  // best_translation = t;
-  // best_rotation = R;
-  best_pose = pose.clone();
+  best_pose.rotation = R1;
+  best_pose.translation = t;
   best_count = current_count;
 
-  cv::hconcat(R, -t, pose);
+  cv::hconcat(R1, -t, pose);
   current_count = num_in_front(identity, pose, K, pts_1, pts_2);
   // Any way to avoid repeating this?
   if (current_count > best_count) {
     best_count = current_count;
-    // best_rotation = R.clone();
-    // best_translation = -t.clone();
-    best_pose = pose.clone();
+    best_pose.rotation = R1;
+    best_pose.translation = -t;
   }
 
-  R = W * V_t;
-  cv::hconcat(R, t, pose);
+  R2 = W * V_t;
+  cv::hconcat(R2, t, pose);
   current_count = num_in_front(identity, pose, K, pts_1, pts_2);
   if (current_count > best_count) {
     best_count = current_count;
-    // best_rotation = R.clone();
-    // best_translation = t.clone();
-    best_pose = pose.clone();
+    best_pose.rotation = R2;
+    best_pose.translation = t;
   }
 
-  cv::hconcat(R, -t, pose);
+  cv::hconcat(R2, -t, pose);
   current_count = num_in_front(identity, pose, K, pts_1, pts_2);
   if (current_count > best_count) {
     best_count = current_count;
-    // best_rotation = R.clone();
-    // best_translation = -t.clone();
-    best_pose = pose.clone();
+    best_pose.rotation = R2;
+    best_pose.translation = -t;
   }
-  // CV_Assert(best_translation.Size()) // Something went wrong
-  // CV_Assert(best_rotation.Size()) // Something went wrong
   return best_pose;
+}
+
+double average_reprojection_error(const Point3Vector& points3d, const PointVector& points2d,
+                                  const Pose& pose, const cv::Mat& K) {
+  cv::Mat points2d_est;
+  cv::Mat points2d_measured(points2d);
+  cv::Mat error;
+  double average_error;
+
+  cv::Mat rotation_vector;
+  cv::Rodrigues(pose.rotation, rotation_vector);
+  cv::projectPoints(points3d, rotation_vector, pose.translation, K, cv::Mat(), points2d_est);
+  error = points2d_est - points2d_measured;
+  for (unsigned int k; k < error.cols; k++) {
+    average_error += cv::norm(error.col(k));
+  }
+  average_error /= error.cols;
+  return average_error;
 }
 }
