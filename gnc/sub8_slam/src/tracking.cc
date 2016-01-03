@@ -1,4 +1,5 @@
 #include <vector>
+#include <string>
 #include <iostream>
 #include <opencv2/opencv.hpp>
 #include <sub8_slam/slam.h>
@@ -22,7 +23,26 @@ void preprocess(cv::Mat& input_image, cv::Mat& output_image, const cv::Mat& intr
 #endif
 }
 
-void initialize(const cv::Mat& frame, PointVector& corners) {
+IdVector which_points(const StatusVector& status, const IdVector& previous) {
+  /* Figure out which points from the original appear in the current frame, numbered */
+  IdVector point_associations;
+  if (previous.size() == 0) {
+    for (unsigned int k = 0; k < status.size(); k++) {
+      if (status[k]) {
+        point_associations.push_back(k);
+      }
+    }
+  } else {
+    for (unsigned int k = 0; k < status.size(); k++) {
+      if (status[k]) {
+        point_associations.push_back(previous[k]);
+      }
+    }
+  }
+  return point_associations;
+}
+
+void initialize(const cv::Mat& frame, PointVector& corners, IdVector& feature_ids) {
   // Parameters to twiddle
   // These should NOT be exposed
   int feature_mask_offset = 5;
@@ -41,27 +61,13 @@ void initialize(const cv::Mat& frame, PointVector& corners) {
   // Discover features
   cv::goodFeaturesToTrack(frame, corners, max_corners, quality, min_distance, feature_mask,
                           block_size, use_harris);
-}
 
-std::vector<int> which_points(const std::vector<uchar>& status, const std::vector<int>& previous) {
-  /* Figure out which points from the original appear in the current frame, numbered */
-  std::vector<int> point_associations;
-  if (previous.size() == 0) {
-    for (unsigned int k = 0; k < status.size(); k++) {
-      if (status[k]) {
-        point_associations.push_back(k);
-      }
-    }
-  } else {
-    for (unsigned int k = 0; k < status.size(); k++) {
-      if (status[k]) {
-        point_associations.push_back(previous[k]);
-      }
-    }
+  for(unsigned int k=0; k < corners.size(); k++) {
+    feature_ids.push_back(k);
   }
 }
 
-PointVector filter(const std::vector<uchar>& status, const PointVector& points) {
+PointVector filter(const StatusVector& status, const PointVector& points) {
   /* filtered_points should be empty
 
   */
@@ -77,7 +83,7 @@ PointVector filter(const std::vector<uchar>& status, const PointVector& points) 
 }
 
 void optical_flow(const cv::Mat& prev_frame, const cv::Mat& cur_frame, PointVector& prev_pts,
-                  PointVector& next_pts, std::vector<uchar>& status) {
+                  PointVector& next_pts, StatusVector& status) {
   /* Compute best sparse optical flow, Lukas-Kanade */
   // Parameters (Not to be exposed!)
   cv::Size win_size(7, 7);  // (21, 21)
@@ -86,7 +92,7 @@ void optical_flow(const cv::Mat& prev_frame, const cv::Mat& cur_frame, PointVect
 
   // Declarations
   // PointVector next_pts;
-  // std::vector<uchar> status;
+  // StatusVector status;
   std::vector<float> error;
   cv::calcOpticalFlowPyrLK(prev_frame, cur_frame, prev_pts, next_pts, status, error, win_size,
                            max_level, criteria);
@@ -95,8 +101,16 @@ void optical_flow(const cv::Mat& prev_frame, const cv::Mat& cur_frame, PointVect
 void draw_points(cv::Mat& frame, const PointVector& points) {
   int radius = 5;
   for (unsigned int k = 0; k < points.size(); k++) {
-    cv::circle(frame, points[k], radius, cv::Scalar(240), 1);
+    cv::circle(frame, points[k], radius, cv::Scalar(240, 0, 0), 1);
     // todo: red rectangle outlines would look cooler
   }
 }
+
+void draw_point_ids(cv::Mat& frame, const PointVector& points, const IdVector& point_ids) {
+  for (unsigned int k = 0; k < points.size(); k++) {
+    // cv::circle(frame, points[k], radius, cv::Scalar(240), 1);
+    cv::putText(frame, std::to_string(point_ids[k]), points[k], cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 250, 0));
+  }
+}
+
 }
