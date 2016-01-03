@@ -43,14 +43,15 @@
 
   --> Visualization
     x --> Visualize triangulated points
+    x --> Consider using RVIZ to visualize
     --> Visualize depth certainty
-    --> Consider using RVIZ to visualize
 
   --> Improvements
     --> SSE on color
     --> Determine when bootstrapping has failed
       (Scale invariant minimum motion requirement)
       (Minimum sum translation?)
+      --> Struggle depth certainty is probably an indicator of a need for reinitializing
 
   --> Experiments
     --> See if 32F improves speed...it will not affect accuracy
@@ -69,6 +70,7 @@
 #include <iostream>
 #include <opencv2/opencv.hpp>
 #include <sub8_slam/slam.h>
+#include "ros/ros.h"
 
 // Probably not super smooth to initialize using normal arrays
 float _intrinsics[] = {978.6015701, 0., 470.27648376, 0., 977.91377625, 270.84941812, 0., 0., 1.};
@@ -78,7 +80,9 @@ float _distortion[] = {-4.37883322e-02, +1.41220879e+00, +1.12558296e-03, -1.788
 cv::Mat intrinsics(3, 3, CV_32F, _intrinsics);
 cv::Mat distortion(5, 1, CV_32F, _distortion);
 
-int main(int argc, char* argv[]) {
+int main(int argc, char **argv) {
+  ros::init(argc, argv, "monocular_slam");
+  slam::RvizVisualizer rviz;
   if (argc != 2) {
     std::cout << "Give me a video..." << std::endl;
     return -1;
@@ -97,7 +101,7 @@ int main(int argc, char* argv[]) {
   cv::namedWindow("input", CV_WINDOW_AUTOSIZE);
   cvMoveWindow("input", 400, 0);
 
-  std::vector<int> previous_feature_ids;
+  slam::IdVector previous_feature_ids, current_feature_ids;
   slam::PointVector prev_pts;
   slam::PointVector new_pts;
 
@@ -121,21 +125,24 @@ int main(int argc, char* argv[]) {
     ////// Initialization
     if (prev_pts.size() == 0) {
       std::cout << "Initializing Frame\n";
-      slam::initialize(current_frame, prev_pts);
+      slam::initialize(current_frame, prev_pts, previous_feature_ids);
       // Initialize previous feature ids to a standard range
-      std::iota(previous_feature_ids.begin(), previous_feature_ids.end(), 0);
       previous_frame = current_frame.clone();
       continue;
     }
 
-    std::vector<uchar> status;
+    slam::StatusVector status;
     slam::optical_flow(previous_frame, current_frame, prev_pts, new_pts, status);
+    // Determine the IDs of the preserved points
+    // TODO: Filter and which_pts in the same function
+    current_feature_ids = slam::which_points(status, previous_feature_ids);
     new_pts = slam::filter(status, new_pts);
     prev_pts = slam::filter(status, prev_pts);
 
-    std::vector<uchar> inliers;
+    slam::StatusVector inliers;
     cv::Mat F;
     F = slam::estimate_fundamental_matrix(prev_pts, new_pts, inliers);
+    current_feature_ids = slam::which_points(inliers, current_feature_ids);
     // Filter by inlier mask
     new_pts = slam::filter(inliers, new_pts);
     prev_pts = slam::filter(inliers, prev_pts);
@@ -147,13 +154,19 @@ int main(int argc, char* argv[]) {
     slam::Point3Vector triangulated;
     slam::triangulate(prev_pose, pose_T, intrinsics, prev_pts, new_pts, triangulated);
     std::cout << "TTT " << triangulated.size() << std::endl;
-    slam::visualize_point3vector(triangulated);
+    // slam::visualize_point3vector(triangulated);
 
-    render_frame = current_frame.clone();
+
+    // render_frame = current_frame.clone();
+
+    cvtColor(current_frame, render_frame, CV_GRAY2BGR, 3);
     slam::draw_points(render_frame, new_pts);
+    slam::draw_point_ids(render_frame, new_pts, current_feature_ids);
+    rviz.draw_points(triangulated);
 
     prev_pts = new_pts;
     previous_frame = current_frame.clone();
+    previous_feature_ids = current_feature_ids;
 
     ++frame_num;
     std::cout << "Frame: " << frame_num << "\n";
