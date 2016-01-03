@@ -17,7 +17,7 @@ class SphereDraw : public mglDraw {
   int Draw(mglGraph* gr);
   void set_data(const Point3Vector& point3vector) { data = point3vector; }
 };
-//-----------------------------------------------------
+
 int SphereDraw::Draw(mglGraph* gr) {
   gr->Rotate(60, 40);
   Point3 point;
@@ -38,7 +38,6 @@ void visualize_point3vector(const Point3Vector& point3vector) {
   gr.Run();
 }
 
-// namespace RvizVisualizer {
 RvizVisualizer::RvizVisualizer() {
   camera_pub = nh.advertise<visualization_msgs::Marker>("/cameras", 1);
   point_pub = nh.advertise<visualization_msgs::Marker>("/points", 1);
@@ -81,7 +80,7 @@ void RvizVisualizer::create_marker(visualization_msgs::Marker& marker) {
   point_marker.type = visualization_msgs::Marker::POINTS;
   marker = point_marker;
 }
-void RvizVisualizer::draw_points(Point3Vector points) {
+void RvizVisualizer::draw_points(Point3Vector& points, bool flag) {
   visualization_msgs::Marker point_marker;
   create_marker(point_marker);
   point_marker.points.resize((int)(points.size()));
@@ -90,7 +89,11 @@ void RvizVisualizer::draw_points(Point3Vector points) {
   for (int i = 0; i < points.size(); i++) {
     point = points[i];
     point_marker.colors[i].a = 1.0f;
-    point_marker.colors[i].r = 1.0f;
+    if (flag) {
+      point_marker.colors[i].r = 1.0f;
+    } else {
+      point_marker.colors[i].g = 1.0f;
+    }
     point_marker.points[i].x = point.x;
     point_marker.points[i].y = -point.y;
     point_marker.points[i].z = -point.z;
