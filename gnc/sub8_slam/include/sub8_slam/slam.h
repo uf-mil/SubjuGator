@@ -2,8 +2,10 @@
 #include <vector>
 #include <iostream>
 #include <opencv2/opencv.hpp>
+#include <sparse_bundle_adjustment/sba.h>
 #include <visualization_msgs/Marker.h>
 #include "ros/ros.h"
+#include "ros/assert.h"
 
 namespace slam {
 
@@ -49,6 +51,26 @@ void triangulate(const Pose& pose_1, const Pose& pose_2, const cv::Mat K, const 
 double average_reprojection_error(const Point3Vector& points3d, const PointVector& points2d,
                                   const Pose& pose, const cv::Mat& K);
 
+// ******* SBA
+void run_sba(cv::Mat& intrinsics, std::vector<Pose>& poses);
+
+class Frame {
+  // Map feature ids
+  // Actual image + pyramid
+  // 2d feature locations when frame was taken
+  // Estimated pose of frame
+ public:
+  cv::Mat image;
+  IdVector feature_ids;
+  PointVector feature_locations;
+  Pose camera_pose;
+  void set_pose(Pose& pose);
+  void set_features(IdVector& feature_ids, PointVector& feature_locations);
+  void set_image(cv::Mat& image);
+  Frame(cv::Mat& image, Pose& pose, IdVector& feature_ids, PointVector& feature_locations);
+  Frame(Pose& pose, IdVector& feature_ids, PointVector& feature_locations);
+};
+
 // ******* 3D Visualization *******
 void visualize_point3vector(const Point3Vector& point3vector);
 
@@ -60,7 +82,9 @@ class RvizVisualizer {
   ros::Publisher point_pub;
   ros::NodeHandle nh;
   RvizVisualizer();
-  void create_marker(visualization_msgs::Marker& marker);
+  void create_marker(visualization_msgs::Marker& camera_marker,
+                     visualization_msgs::Marker& point_marker);
   void draw_points(Point3Vector& points, bool flag);
+  void draw_sba(const sba::SysSBA& sba, int decimation, int bicolor);
 };
 }

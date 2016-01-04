@@ -1,9 +1,13 @@
 /*
 
   "Frame" class
-    --> Has features associated with it
-    --> Some kind of graph of features that exist in the next frame
+    x --> Has features associated with it
+    x --> Some kind of graph of features that exist in the next frame
       --> (Perhaps only *detect* new features in new keyframes)
+    --> Distinguish between normal frames and keyframes
+    --> local sba requires all frames
+    --> global SBA requires all frames
+    --> global SBA refinement requires only keyframes
 
   --> Bootstrap
     x --> LK
@@ -27,7 +31,13 @@
       --> Huber distance Lie-Alg optimization?
       --> GN solver
         --> Inverse Compositional solver
-    --> Do Bayes shenanigans
+    --> Bayes Filter
+      --> Discrete/histogram
+      --> Parametric mixture-model
+      --> OpenCL histogram
+      --> Particle filter feasible?
+      --> Unscented transform feasible?
+
     --> Reinitialize when needed
       --> Not restricting ourselves to pure optical flow may...
         - Improve speed (only search on epipolar lines + covariance)
@@ -44,7 +54,14 @@
   --> Visualization
     x --> Visualize triangulated points
     x --> Consider using RVIZ to visualize
+        x --> Make visualizer for our own triangulation
+        x --> Make Rviz interface
     --> Visualize depth certainty
+
+  --> Testing
+    x --> Make an analysis set
+    x --> Record data
+    --> Make a two-frame-sandbox executable for testing various things
 
   --> Improvements
     --> SSE on color
@@ -60,10 +77,9 @@
     --> Optical Flow
     --> Explicit posterior computation
     --> SSE for larger patches (invariance promises weaken past 4x4)
+      --> pose to SSE
 
-  --> Put this in Sub Git
-    -->...Or my own git for an eventual merge?
-  --> Get CPPCheck
+  x --> Put this in Sub Git
 */
 
 #include <vector>
@@ -101,13 +117,15 @@ int main(int argc, char **argv) {
   cv::namedWindow("input", CV_WINDOW_AUTOSIZE);
   cvMoveWindow("input", 400, 0);
 
-  slam::IdVector previous_feature_ids, current_feature_ids;
-  slam::PointVector prev_pts;
-  slam::PointVector new_pts;
+  slam::IdVector prev_feature_ids, new_feature_ids;
+  slam::PointVector prev_feature_locations;
+  slam::PointVector new_feature_locations;
 
-  cv::Mat input_frame, current_frame, render_frame;
-  cv::Mat previous_frame;
-  cv::Mat prev_pose = cv::Mat::eye(3, 4, CV_32F);
+  cv::Mat input_frame, new_frame, render_frame;
+  cv::Mat prev_frame;
+  slam::Pose prev_pose;
+  prev_pose.rotation = cv::Mat::eye(3, 3, CV_32F);
+  prev_pose.translation = (cv::Mat_<float>(3, 1) << 0.0, 0.0, 0.0);
 
   int frame_num = 0;
   char key_press = '\n';
@@ -120,53 +138,60 @@ int main(int argc, char **argv) {
     }
 
     /////// Preprocessing
-    slam::preprocess(input_frame, current_frame, intrinsics, distortion);
+    slam::preprocess(input_frame, new_frame, intrinsics, distortion);
 
     ////// Initialization
-    if (prev_pts.size() == 0) {
+    if (prev_feature_locations.size() == 0) {
       std::cout << "Initializing Frame\n";
-      slam::initialize(current_frame, prev_pts, previous_feature_ids);
+      slam::initialize(new_frame, prev_feature_locations, prev_feature_ids);
       // Initialize previous feature ids to a standard range
-      previous_frame = current_frame.clone();
+      prev_frame = new_frame.clone();
       continue;
     }
 
+    ////// Track known points and dismiss outliers
     slam::StatusVector status;
-    slam::optical_flow(previous_frame, current_frame, prev_pts, new_pts, status);
+    slam::optical_flow(prev_frame, new_frame, prev_feature_locations, new_feature_locations, status);
     // Determine the IDs of the preserved points
     // TODO: Filter and which_pts in the same function
-    current_feature_ids = slam::which_points(status, previous_feature_ids);
-    new_pts = slam::filter(status, new_pts);
-    prev_pts = slam::filter(status, prev_pts);
+    new_feature_ids = slam::which_points(status, prev_feature_ids);
+    new_feature_locations = slam::filter(status, new_feature_locations);
+    prev_feature_locations = slam::filter(status, prev_feature_locations);
 
+    ////// Compute the fundametnal matrix and dismiss outliers
     slam::StatusVector inliers;
     cv::Mat F;
-    F = slam::estimate_fundamental_matrix(prev_pts, new_pts, inliers);
-    current_feature_ids = slam::which_points(inliers, current_feature_ids);
+    F = slam::estimate_fundamental_matrix(prev_feature_locations, new_feature_locations, inliers);
+    new_feature_ids = slam::which_points(inliers, new_feature_ids);
     // Filter by inlier mask
-    new_pts = slam::filter(inliers, new_pts);
-    prev_pts = slam::filter(inliers, prev_pts);
+    new_feature_locations = slam::filter(inliers, new_feature_locations);
+    prev_feature_locations = slam::filter(inliers, prev_feature_locations);
 
-    cv::Mat pose_T;
-    pose_T = slam::estimate_motion(prev_pts, new_pts, F, intrinsics);
-    std::cout << pose_T << 't' << std::endl;
+    ////// Estimate motin from the fundamental matrix
+    slam::Pose pose_T;
+    pose_T = slam::estimate_motion(prev_feature_locations, new_feature_locations, F, intrinsics);
+    std::cout << pose_T.rotation << 't' << std::endl;
 
+    ////// Triangulate points and dismiss the guess based on magnitude of reprojection error
     slam::Point3Vector triangulated;
-    slam::triangulate(prev_pose, pose_T, intrinsics, prev_pts, new_pts, triangulated);
-    std::cout << "TTT " << triangulated.size() << std::endl;
-    // slam::visualize_point3vector(triangulated);
+    slam::triangulate(prev_pose, pose_T, intrinsics, prev_feature_locations, new_feature_locations, triangulated);
+    double error_amt = slam::average_reprojection_error(triangulated, new_feature_locations, pose_T, intrinsics);
+    std::cout << "Error: " << error_amt << std::endl;
 
+    ////// Initialize a slam frame based on these shenanigans
+    if (error_amt < 100.0) {
+      slam::Frame(pose_T, new_feature_ids, new_feature_locations);
+    }
 
-    // render_frame = current_frame.clone();
+    // Make a nice new frame, on which to draw colored things
+    cv::cvtColor(new_frame, render_frame, CV_GRAY2BGR, 3);
+    slam::draw_points(render_frame, new_feature_locations);
+    slam::draw_point_ids(render_frame, new_feature_locations, new_feature_ids);
+    rviz.draw_points(triangulated, error_amt > 100.0);
 
-    cvtColor(current_frame, render_frame, CV_GRAY2BGR, 3);
-    slam::draw_points(render_frame, new_pts);
-    slam::draw_point_ids(render_frame, new_pts, current_feature_ids);
-    rviz.draw_points(triangulated);
-
-    prev_pts = new_pts;
-    previous_frame = current_frame.clone();
-    previous_feature_ids = current_feature_ids;
+    prev_feature_locations = new_feature_locations;
+    prev_frame = new_frame.clone();
+    prev_feature_ids = new_feature_ids;
 
     ++frame_num;
     std::cout << "Frame: " << frame_num << "\n";
