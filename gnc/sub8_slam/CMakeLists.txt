@@ -51,25 +51,35 @@ include_directories(
 # add_executable(bayesian_filter svo_cpp/bayesian_filter.cc)
 # target_link_libraries(bayesian_filter ${MathGL_LIBRARIES})
 
-add_executable(slam src/slam src/tracking src/motion src/visualization include/backward.cpp)
+# TODO Don't list the files like a schmuck
+set(slam_sources
+  src/slam
+  src/tracking
+  src/motion
+  src/visualization3d
+  src/visualization2d
+  src/frame
+  src/sba
+)
+
+add_executable(slam ${slam_sources} include/backward.cpp)
 target_link_libraries(slam
-  # ${OpenCV_LIBRARIES}
-  ${OpenCV_LIBS}
+  ${OpenCV_LIBS} # maybe _LIBRARIES
   ${MathGL_LIBRARIES}
   ${catkin_LIBRARIES}
   # ${Boost_LIBRARIES}
-  # ${SBA_LIB}
+  ${SBA_LIB}
   bfd
   dl
 )
 
-# Not a fan of fpermissive - but SBA won't build without it
+# Not a fan of fpermissive - but SBA won't link in C++11 without it
 set(CMAKE_CXX_FLAGS "-std=c++11 -fext-numeric-literals -fpermissive -g -rdynamic")
 
-add_executable(sba_demo analysis/sba_test analysis/visualization include/backward.cpp)
-target_link_libraries(sba_demo
-  ${SBA_LIB}
-  ${catkin_LIBRARIES}
-  bfd
-  dl
-)
+# add_executable(sba_demo analysis/sba_test analysis/visualization include/backward.cpp)
+# target_link_libraries(sba_demo
+#   ${SBA_LIB}
+#   ${catkin_LIBRARIES}
+#   bfd
+#   dl
+# )
