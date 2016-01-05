@@ -34,7 +34,8 @@ PointVector filter(const std::vector<uchar>& status, const PointVector& points);
 void optical_flow(const cv::Mat& prev_frame, const cv::Mat& cur_frame, PointVector& prev_pts,
                   PointVector& next_pts, std::vector<uchar>& status);
 
-std::vector<int> which_points(const StatusVector& status, const std::vector<int>& previous);
+Point3Vector get_points(const IdVector& keep_ids, const Point3Vector& points);
+IdVector which_points(const StatusVector& status, const IdVector& previous);
 
 void draw_points(cv::Mat& frame, const PointVector& points);
 
@@ -42,8 +43,10 @@ void draw_points(cv::Mat& frame, const PointVector& points);
 cv::Mat estimate_fundamental_matrix(const PointVector& pts_1, const PointVector& pts_2,
                                     std::vector<uchar>& inliers);
 
-Pose estimate_motion(const PointVector& pts_1, const PointVector& pts_2, const cv::Mat& F,
-                     const cv::Mat& K);
+Pose estimate_motion_fundamental_matrix(const PointVector& pts_1, const PointVector& pts_2,
+                                        const cv::Mat& F, const cv::Mat& K);
+
+Pose estimate_motion_pnp(const Point3Vector& pts_3d, const PointVector& pts_2d, const cv::Mat& K);
 
 void triangulate(const Pose& pose_1, const Pose& pose_2, const cv::Mat K, const PointVector& pts_1,
                  const PointVector& pts_2, Point3Vector& triangulated);
@@ -72,8 +75,6 @@ class Frame {
 };
 
 // ******* 3D Visualization *******
-void visualize_point3vector(const Point3Vector& point3vector);
-
 void draw_point_ids(cv::Mat& frame, const PointVector& points, const std::vector<int>& point_ids);
 
 class RvizVisualizer {
