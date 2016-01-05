@@ -17,7 +17,6 @@ int num_in_front(const cv::Mat pose_1, const cv::Mat pose_2, const cv::Mat K,
   /*
     Compute the number of points in front, without dehomogenizing
   */
-  // Point4Vector output_pts;
   cv::Mat proj_1 = cv::Mat_<float>(K * pose_1);
   cv::Mat proj_2 = cv::Mat_<float>(K * pose_2);
   cv::Mat output_pts = cv::Mat(4, pts_2.size(), CV_32F);
@@ -31,7 +30,7 @@ int num_in_front(const cv::Mat pose_1, const cv::Mat pose_2, const cv::Mat K,
 }
 
 void convert_from_homogeneous4d(const cv::Mat& src, Point3Vector& output) {
-  // Opencv convert sucked
+  // Opencv convert had very undesirable behavior
   for (unsigned int k; k < src.cols; k++) {
     cv::Mat row = src.col(k);
     output.push_back(Point3(row.at<float>(0) / row.at<float>(3),
@@ -41,7 +40,6 @@ void convert_from_homogeneous4d(const cv::Mat& src, Point3Vector& output) {
 }
 
 cv::Mat deskew(const cv::Mat T) {
-  // Double check row or column major
   cv::Mat t = (cv::Mat_<float>(3, 1) << T.at<float>(2, 1), T.at<float>(0, 2), T.at<float>(1, 0));
   return t;
 }
@@ -55,16 +53,38 @@ void triangulate(const Pose& pose_1, const Pose& pose_2, const cv::Mat K, const 
   cv::Mat proj_2 = cv::Mat_<float>(K * mat_pose_2);
   cv::Mat output_pts = cv::Mat(4, pts_2.size(), CV_32F);
   cv::triangulatePoints(proj_1, proj_2, pts_1, pts_2, output_pts);
-  // cv::convertPointsFromHomogeneous(output_pts, triangulated);
   convert_from_homogeneous4d(output_pts, triangulated);
 }
 
-Pose estimate_motion(const PointVector& pts_1, const PointVector& pts_2, const cv::Mat& F,
-                     const cv::Mat& K) {
+Pose estimate_motion_pnp(const Point3Vector& pts_3d, const PointVector& pts_2d, const cv::Mat& K) {
+  // TODO: Permit extrinsic guess
+  // cv::solvePnP(InputArray objectPoints, InputArray imagePoints, InputArray cameraMatrix,
+  //             InputArray distCoeffs, OutputArray rvec, OutputArray tvec,
+  //             bool useExtrinsicGuess = false, int flags = ITERATIVE);
+  cv::Mat translation_vector;
+  cv::Mat rotation_vector;
+  cv::solvePnP(pts_3d, pts_2d, K, cv::Mat(), rotation_vector, translation_vector, false,
+               CV_ITERATIVE);
+  Pose pose;
+  pose.translation = translation_vector;
+  // How bout that!
+  cv::Rodrigues(rotation_vector, pose.rotation);
+  // Quick-inverse
+  pose.rotation = -pose.rotation.t();  // Transpose R
+  pose.translation = pose.rotation * pose.translation;
+  return pose;
+}
+
+Pose estimate_motion_fundamental_matrix(const PointVector& pts_1, const PointVector& pts_2,
+                                        const cv::Mat& F, const cv::Mat& K) {
   /*
+    This + triangulation is the bootstrapping I talk so much about.
+      F: Fundamental matrix
+      K: Camera Intrinsic matrix
     TODO: Points3Vector bootstrap(pts_1, pts_2, F, cv::Mat K)
-    F: Fundamental matrix
-    K: Camera Intrinsic matrix
+
+    The pose is in the Sim(3) frame of the first camera pose, with \lambda being close to the
+      distance between the cameras in the two frames
   */
 
   // Essential matrix
@@ -91,8 +111,9 @@ Pose estimate_motion(const PointVector& pts_1, const PointVector& pts_2, const c
   int best_count = 0;
   int current_count = 0;
   Pose best_pose;
-  // Explicitly test for the transform with the best front-ness
 
+  // Explicitly test for the transform with the best front-ness
+  // This will be called a handful of times, and does not merit serious optimization
   R1 = U * W.t() * V_t;
   cv::hconcat(R1, t, pose);
   current_count = num_in_front(identity, pose, K, pts_1, pts_2);
