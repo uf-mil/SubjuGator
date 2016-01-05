@@ -59,7 +59,7 @@ set(slam_sources
   src/visualization3d
   src/visualization2d
   src/frame
-  src/sba
+  # src/sba
 )
 
 add_executable(slam ${slam_sources} include/backward.cpp)
