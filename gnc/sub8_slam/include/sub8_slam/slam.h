@@ -37,8 +37,6 @@ void optical_flow(const cv::Mat& prev_frame, const cv::Mat& cur_frame, PointVect
 Point3Vector get_points(const IdVector& keep_ids, const Point3Vector& points);
 IdVector which_points(const StatusVector& status, const IdVector& previous);
 
-void draw_points(cv::Mat& frame, const PointVector& points);
-
 // ******* Motion *******
 cv::Mat estimate_fundamental_matrix(const PointVector& pts_1, const PointVector& pts_2,
                                     std::vector<uchar>& inliers);
@@ -74,8 +72,13 @@ class Frame {
   Frame(Pose& pose, IdVector& feature_ids, PointVector& feature_locations);
 };
 
-// ******* 3D Visualization *******
+// 2d visualization
+void draw_points(cv::Mat& frame, const PointVector& points, int radius = 5, int thickness = 1);
 void draw_point_ids(cv::Mat& frame, const PointVector& points, const std::vector<int>& point_ids);
+void draw_reprojection(cv::Mat& frame, const Point3Vector& points3d, const Pose& pose,
+                       const cv::Mat& K);
+
+// ******* 3D Visualization *******
 
 class RvizVisualizer {
  public:

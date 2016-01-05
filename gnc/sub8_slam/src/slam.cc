@@ -24,13 +24,17 @@
 
   --> Estimate Motion
     x --> Estimate fundamental matrix
+        x --> Estimate inconsistent motion from essential matrix
     x --> Triangulate points
     --> Improve with SBA
       --> SBA tools
-    --> PnP solving
+    --> Metric Motion
+      --> PnP solving
       --> Huber distance Lie-Alg optimization?
+      --> Sparse model-based image alignment
       --> GN solver
         --> Inverse Compositional solver
+
     --> Bayes Filter
       --> Discrete/histogram
       --> Parametric mixture-model
@@ -120,6 +124,12 @@ int main(int argc, char **argv) {
   slam::IdVector prev_feature_ids, new_feature_ids;
   slam::PointVector prev_feature_locations;
   slam::PointVector new_feature_locations;
+  std::vector<slam::Frame> frames;
+  slam::Point3Vector map;
+
+  // YO VISUALIZE POINTS
+  // For debugging
+  slam::Point3Vector camera_locations;
 
   cv::Mat input_frame, new_frame, render_frame;
   cv::Mat prev_frame;
@@ -140,6 +150,9 @@ int main(int argc, char **argv) {
     /////// Preprocessing
     slam::preprocess(input_frame, new_frame, intrinsics, distortion);
 
+    // Make a nice new frame, on which to draw colored things
+    cv::cvtColor(new_frame, render_frame, CV_GRAY2BGR, 3);
+
     ////// Initialization
     if (prev_feature_locations.size() == 0) {
       std::cout << "Initializing Frame\n";
@@ -151,7 +164,8 @@ int main(int argc, char **argv) {
 
     ////// Track known points and dismiss outliers
     slam::StatusVector status;
-    slam::optical_flow(prev_frame, new_frame, prev_feature_locations, new_feature_locations, status);
+    slam::optical_flow(prev_frame, new_frame, prev_feature_locations, new_feature_locations,
+                       status);
     // Determine the IDs of the preserved points
     // TODO: Filter and which_pts in the same function
     new_feature_ids = slam::which_points(status, prev_feature_ids);
@@ -168,26 +182,61 @@ int main(int argc, char **argv) {
     prev_feature_locations = slam::filter(inliers, prev_feature_locations);
 
     ////// Estimate motin from the fundamental matrix
-    slam::Pose pose_T;
-    pose_T = slam::estimate_motion(prev_feature_locations, new_feature_locations, F, intrinsics);
-    std::cout << pose_T.rotation << 't' << std::endl;
+    slam::Pose pose_F;
+    pose_F = slam::estimate_motion_fundamental_matrix(prev_feature_locations, new_feature_locations,
+                                                      F, intrinsics);
 
     ////// Triangulate points and dismiss the guess based on magnitude of reprojection error
-    slam::Point3Vector triangulated;
-    slam::triangulate(prev_pose, pose_T, intrinsics, prev_feature_locations, new_feature_locations, triangulated);
-    double error_amt = slam::average_reprojection_error(triangulated, new_feature_locations, pose_T, intrinsics);
-    std::cout << "Error: " << error_amt << std::endl;
+
+    slam::Point3Vector triangulation_F;
+    slam::triangulate(prev_pose, pose_F, intrinsics, prev_feature_locations, new_feature_locations,
+                      triangulation_F);
+
+    // Todo: use PNP pose
+    double error_amt = slam::average_reprojection_error(triangulation_F, new_feature_locations,
+                                                        pose_F, intrinsics);
+    // std::cout << "Error: " << error_amt << std::endl;
 
     ////// Initialize a slam frame based on these shenanigans
     if (error_amt < 100.0) {
-      slam::Frame(pose_T, new_feature_ids, new_feature_locations);
+      // initialize map only if we have little reproj error
+      if (map.size() == 0) {
+        map = triangulation_F;
+      }
+
+      slam::Point3Vector map_visible;
+      // Determine which points in the map are currently visible
+      map_visible = slam::get_points(new_feature_ids, map);
+      slam::Pose pose_pnp;
+      pose_pnp = slam::estimate_motion_pnp(map_visible, new_feature_locations, intrinsics);
+
+      double pnp_error_amt = slam::average_reprojection_error(map_visible, new_feature_locations,
+                                                              pose_pnp, intrinsics);
+
+      std::cout << "PNP Error: " << pnp_error_amt << std::endl;
+      slam::draw_reprojection(render_frame, map_visible, pose_pnp, intrinsics);
+
+      // Magic number -- TODO why is this so large compared to 100.0?
+      if (pnp_error_amt < 2500.0) {
+        slam::Point3 pt(pose_pnp.translation);
+        camera_locations.push_back(pt);
+
+        slam::Frame key_frame(pose_pnp, new_feature_ids, new_feature_locations);
+        frames.push_back(key_frame);
+      }
     }
 
-    // Make a nice new frame, on which to draw colored things
-    cv::cvtColor(new_frame, render_frame, CV_GRAY2BGR, 3);
+    ////// Visualize
     slam::draw_points(render_frame, new_feature_locations);
     slam::draw_point_ids(render_frame, new_feature_locations, new_feature_ids);
-    rviz.draw_points(triangulated, error_amt > 100.0);
+    // Shove that shit into Rviz!
+    if (error_amt < 100.0) {
+      rviz.draw_points(triangulation_F, error_amt > 100.0);
+    }
+
+    if (camera_locations.size() > 0) {
+      rviz.draw_points(camera_locations, true);
+    }
 
     prev_feature_locations = new_feature_locations;
     prev_frame = new_frame.clone();
