@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<package>
+  <name>sub8_slam</name>
+  <version>0.2.0</version>
+  <description>The sub8_slam package</description>
+  <maintainer email="jpanikul@gmail.com">jacob panikulam</maintainer>
+  <license>MIT</license>
+  <build_depend>cmake_modules</build_depend>
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>roscpp</build_depend>
+  <run_depend>roscpp</run_depend>
+  <run_depend>sba</run_depend>
+  <export>
+  </export>
+</package>
