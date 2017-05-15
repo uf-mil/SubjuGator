@@ -63,7 +63,7 @@ def main(args):
             last_digit_index = [i for i, c in enumerate(args.argument) if c.isdigit()][-1] + 1
             amount = args.argument[:last_digit_index]
             unit = args.argument[last_digit_index:]
-        amout = float(amount)
+        amount = float(amount)
 
         extra = "and zeroing pitch and roll" if args.zrp else ""
         fprint("{}ing {}{} {}".format(command, amount, unit, extra))
