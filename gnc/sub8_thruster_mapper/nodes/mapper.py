@@ -63,10 +63,14 @@ class ThrusterMapper(object):
         self.max_thrusts = np.copy(self.default_max_thrusts)
 
         for thruster_name in self.dropped_thrusters:
-            thruster_index = self.thruster_name_map.index(thruster_name)
-            self.min_thrusts[thruster_index] = -self.min_commandable_thrust * 0.5
-            self.max_thrusts[thruster_index] = self.min_commandable_thrust * 0.5
-
+            try:
+                thruster_index = self.thruster_name_map.index(thruster_name)
+                self.min_thrusts[thruster_index] = -self.min_commandable_thrust * 0.5
+                self.max_thrusts[thruster_index] = self.min_commandable_thrust * 0.5
+            except:
+                print "Failed"
+            self.thruster_layout['thrusters'].pop(thruster_name, "None")
+        self.B = self.generate_B(self.thruster_layout)
         rospy.logwarn("Layout updated")
         return UpdateThrusterLayoutResponse()
 
@@ -123,6 +127,7 @@ class ThrusterMapper(object):
             )
             self.num_thrusters += 1
             B.append(wrench_column)
+
         return np.transpose(np.array(B))
 
     def map(self, wrench):
