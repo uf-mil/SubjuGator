@@ -373,17 +373,18 @@ class ThrusterDriver(object):
     def alert_thruster_loss(self, thruster_name, last_update):
         if thruster_name not in self.failed_thrusters:
             self.failed_thrusters.append(thruster_name)
-        rospy.wait_for_service('update_thruster_layout')
         try:
-            update = rospy.ServiceProxy('update_thruster_layout')
-            rospy.wait_for_service('b_matrix')
+            update = rospy.ServiceProxy('update_thruster_layout', UpdateThrusterLayout)
+            update()
             try:
-                B = rospy.ServiceProxy('b_matrix')
-                B = np.asmatrix(B)
+                get_b = rospy.ServiceProxy('b_matrix', BMatrix)
+                b_response = get_b()
+                B = np.asmatrix(b_response.B).reshape(6, -1)
                 if (np.linalg.matrix_rank(B) < 6):
                     self.thruster_out_alarm.raise_alarm(
                         parameters={
-                            'thruster_names': self.failed_thrusters + "B MATRIX IS SINGULAR",
+                            'thruster_names': self.failed_thrusters,
+                            'issue': "B MATRIX IS SINGULAR",
                         },
                         severity=5
                     )
