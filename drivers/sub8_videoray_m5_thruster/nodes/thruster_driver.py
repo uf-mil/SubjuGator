@@ -9,7 +9,7 @@ import argparse
 from std_msgs.msg import Header, Float64
 from sub8_msgs.msg import Thrust, ThrusterStatus
 from mil_ros_tools import wait_for_param, thread_lock
-from sub8_msgs.srv import ThrusterInfo, ThrusterInfoResponse, FailThruster, FailThrusterResponse
+from sub8_msgs.srv import ThrusterInfo, ThrusterInfoResponse, FailThruster, FailThrusterResponse, UpdateThrusterLayout, BMatrix
 from sub8_thruster_comm import thruster_comm_factory
 from ros_alarms import AlarmBroadcaster, AlarmListener
 lock = threading.Lock()
@@ -336,6 +336,90 @@ class ThrusterDriver(object):
         for name in self.port_dict.keys():
             if name not in self.failed_thrusters:
                 self.command_thruster(name, 0.0)
+
+    def alert_thruster_unloss(self, thruster_name):
+        if thruster_name in self.failed_thrusters:
+            self.failed_thrusters.remove(thruster_name)
+        if len(self.failed_thrusters) == 0:
+            self.thruster_out_alarm.clear_alarm(parameters={"clear_all"})
+        else:
+            rospy.wait_for_service('update_thruster_layout')
+            try:
+                update = rospy.ServiceProxy('update_thruster_layout', UpdateThrusterLayout)
+                rospy.wait_for_service('b_matrix')
+                try:
+                    B = rospy.ServiceProxy('b_matrix', BMatrix)
+                    B = np.asmatrix(B)
+                    if (np.linalg.matrix_rank(B) < 6):
+                        self.thruster_out_alarm.raise_alarm(
+                            parameters={
+                                'thruster_names': self.failed_thrusters + "B MATRIX IS SINGULAR",
+                            },
+                            severity=5
+                        )
+                except rospy.ServiceException, e:
+                    print "Service call failed: %s"%e
+            except rospy.ServiceException, e:
+                print "Service call failed: %s"%e
+            severity = 3 if len(self.failed_thrusters) <= rospy.get_param("thruster_loss_limit", 2) else 5
+            rospy.logerr(self.failed_thrusters)
+            self.thruster_out_alarm.raise_alarm(
+                parameters={
+                    'thruster_names': self.failed_thrusters,
+                },
+                severity=severity
+            )
+
+    def alert_thruster_loss(self, thruster_name, last_update):
+        if thruster_name not in self.failed_thrusters:
+            self.failed_thrusters.append(thruster_name)
+        rospy.wait_for_service('update_thruster_layout')
+        try:
+            update = rospy.ServiceProxy('update_thruster_layout')
+            rospy.wait_for_service('b_matrix')
+            try:
+                B = rospy.ServiceProxy('b_matrix')
+                B = np.asmatrix(B)
+                if (np.linalg.matrix_rank(B) < 6):
+                    self.thruster_out_alarm.raise_alarm(
+                        parameters={
+                            'thruster_names': self.failed_thrusters + "B MATRIX IS SINGULAR",
+                        },
+                        severity=5
+                    )
+            except rospy.ServiceException, e:
+                print "Service call failed: %s"%e
+        except rospy.ServiceException, e:
+            print "Service call failed: %s"%e
+        # Severity rises to 5 if too many thrusters are out
+        severity = 3 if len(self.failed_thrusters) <= rospy.get_param("thruster_loss_limit", 2) else 5
+        rospy.logerr(self.failed_thrusters)
+        self.thruster_out_alarm.raise_alarm(
+            problem_description='Thruster {} has failed'.format(thruster_name),
+            parameters={
+                'thruster_names': self.failed_thrusters,
+                'last_update': last_update
+            },
+            severity=severity
+        )
+
+    def alert_bus_voltage(self, voltage):
+        severity = 3 
+        # Kill if the voltage goes too low
+        if self.bus_voltage < rospy.get_param("/battery/kill_voltage", 44.0):
+            severity = 5
+        
+        self.bus_voltage_alarm.raise_alarm(
+            problem_description='Bus voltage has fallen to {}'.format(voltage),
+            parameters={
+                'bus_voltage': voltage,
+            },
+            severity=severity
+        )
+
+    def fail_thruster(self, srv):
+        self.alert_thruster_loss(srv.thruster_name, None)
+        return FailThrusterResponse()
 
 
 if __name__ == '__main__':
