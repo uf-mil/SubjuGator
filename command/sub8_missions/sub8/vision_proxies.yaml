@@ -8,3 +8,7 @@ buoy:
     root: "/vision/buoys"
 start_gate:
     root: "/vision/start_gate"
+tower_pipes:
+    root: "/vision/tower_pipes"
+table_ovals:
+    root: "/vision/table_ovals"
