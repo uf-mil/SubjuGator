@@ -49,11 +49,11 @@ class CollectClassifyMission(object):
     BLIND = True
     BASE_LINK_TO_ARM = np.array([0, 0, 0])  # Transformation from base_link to claw of arm mechanism
     COLORS = ['red', 'green', 'orange', 'blue']
-    PIPE_SEARCH_DEPTH = 0.5
-    PIPE_SEARCH_RADIUS = 2.0
-    OVAL_SEARCH_DEPTH = 1.0
-    OVAL_DROP_HEIGHT = 1.5
-    OCTOGON_RADIUS = 2.7
+    PIPE_SEARCH_HEIGHT = 0.6096  # Distance above ground to circle tower to find pipes, meters to dvl
+    PIPE_SEARCH_RADIUS = 2.0  # Radius in meters around pinger to circle tower to find pipes
+    OVAL_SEARCH_HEIGHT = 1.524  # Distance above ground to look for oval table, meters from ground to dvl
+    OVAL_DROP_HEIGHT = 1.0  # Height to drop pipe onto table, meters from ground to dvl
+    OCTOGON_RADIUS = 2.7  # Radius of octogon from rules, meters
 
     def __init__(self, sub):
         self.sub = sub
@@ -67,6 +67,12 @@ class CollectClassifyMission(object):
 
         self.print_bad = FprintFactory(title=MISSION, msg_color="red").fprint
         self.print_good = FprintFactory(title=MISSION, msg_coolr="green").fprint
+
+    def height_to_depth(self, height):
+        '''
+        Uses dvl to convert a height over ground to a depth
+        '''
+        return -self.sub.move.to_height(height)._pose.position[2]
 
     @staticmethod
     def vision_response_to_pose(res):
@@ -127,7 +133,8 @@ class CollectClassifyMission(object):
         '''
         yield self.sub.move.depth(0).go()
         yield self.sub.nh.sleep(2.0).go()
-        yield self.sub.move.depth(self.OVAL_SEARCH_DEPTH).go()
+        depth = self.height_to_depth(CollectClassifyMission.OVAL_SEARCH_HEIGHT)
+        yield self.sub.move.depth(depth).go()
 
     @util.cancellableInlineCallbacks
     def circle(self, origin, radius, num_moves=10, proportion=1.0):
@@ -157,7 +164,7 @@ class CollectClassifyMission(object):
         @util.cancellableInlineCallbacks
         def circle_pinger():
             origin = self.pinger_position
-            origin[2] = -self.PIPE_SEARCH_DEPTH
+            origin[2] = -self.height_to_depth(self.PIPE_SEARCH_HEIGHT)
             yield self.circle(origin, CollectClassifyMission.PIPE_SEARCH_RADIUS)
             self.circle_done = True
         search = circle_pinger()
@@ -243,7 +250,7 @@ class CollectClassifyMission(object):
             defer.returnValue(True)
 
         origin = self.pinger_position
-        origin[2] = CollectClassifyMission.OVAL_SEARCH_DEPTH
+        origin[2] = -self.height_to_depth(CollectClassifyMission.OVAL_SEARCH_HEIGHT)
         circle_done = False
 
         @util.cancellableInlineCallbacks
@@ -273,7 +280,8 @@ class CollectClassifyMission(object):
         yield self.sub.vision_proxies.table_ovals.start()
 
         # Go to safe depth so we don't hit tower
-        yield self.sub.move.depth(CollectClassifyMission.OVAL_SEARCH_DEPTH).go()
+        depth = self.height_to_depth(CollectClassifyMission.OVAL_SEARCH_HEIGHT)
+        yield self.sub.move.depth(depth).go()
 
         # Circle outside octogon to find table if no ovals found yet
         table_found = yield self.find_first_oval()
@@ -293,7 +301,7 @@ class CollectClassifyMission(object):
         def search_table():
             assert len(self.ovals_found) != 0
             start = self.ovals_found[np.random.randint(0, len(self.oval_found))].pose[0]
-            start[2] = CollectClassifyMission.OVAL_SEARCH_DEPTH
+            start[2] = -self.height_to_depth(CollectClassifyMission.OVAL_SEARCH_HEIGHT)
             yield self.circle(start, CollectClassifyMission.TABLE_RADIUS)
             search_done = True  # noqa
 
@@ -320,11 +328,11 @@ class CollectClassifyMission(object):
         # Move at safe depth above oval
         position = pose[0]
         position = position + CollectClassifyMission.BASE_LINK_TO_ARM
-        position[2] = CollectClassifyMission.OVAL_SEARCH_DEPTH
+        position[2] = -self.height_to_depth(CollectClassifyMission.OVAL_SEARCH_HEIGHT)
         yield self.sub.move.set_position(position).set_orientation(pose[1]).zero_roll_and_pitch()
 
         # Desend to right above oval
-        position[2] = pose[0][2] + CollectClassifyMission.OVAL_DROP_HEIGHT
+        position[2] = -self.height_to_depth(CollectClassifyMission.OVAL_DROP_HEIGHT)
         yield self.sub.move.set_position(position).set_orientation(pose[1]).zero_roll_and_pitch()
 
         # Release grabber
