@@ -132,9 +132,37 @@ class _PoseProxy(object):
 
     # Some special moves
     def to_height(self, height):
+        '''
+        Move to a specified distance above the ground
+        @param height Distance from ground to DVL to move sub to
+        '''
         dist_to_bot = self._sub._dvl_range_sub.get_last_message()
         delta_height = dist_to_bot.range - height
         return self.down(delta_height)
+
+    @util.cancellableInlineCallbacks
+    def circle(self, origin, radius, num_moves=10, theta=2.0 * np.pi, *args, **kwargs):
+        '''
+        Execute discrete moves to circle around a point while looking at that point.
+        Sub maintains starting depth while circling, and will NOT pitch to look at origin.
+        \warning You don't need to call .go() when using this. Pass kwargs (blind, speed) to this as if it is .go()
+
+        @param origin A numpy array representing the 3D point to circle around.
+               origin[2] is the constant depth maintained during the circle
+        @param radius The radius in meters to circle origin at
+        @param num_moves The number of discrete moves used to complete the circle
+        @param theta Used to do semi-circles or multiple circles. Ex: theta=pi: 1/2 circle, theta=4pi: 2 circles
+        '''
+        depth = self._sub._pose.position[2]  # Ensure depth is constant throughout circle
+        start_move = self._sub.move.look_at_without_pitching(origin).set_position(origin).depth(depth).backward(radius)
+        start_position = start_move._pose.position
+        yield start_move.go(*args, **kwargs)
+        offset = start_position - origin
+        start_theta = np.arctan2(offset[1], offset[0])
+        for theta in np.linspace(start_theta, theta + start_theta, num=num_moves):
+            d = np.array([radius * np.cos(theta), radius * np.sin(theta), 0])
+            p = origin + d
+            yield self._sub.move.set_position(p).look_at_without_pitching(self.pinger_position).go(*args, **kwargs)
 
     def check_goal(self):
         '''Check end goal for feasibility.
@@ -146,12 +174,18 @@ class _PoseProxy(object):
             print "GOAL TOO HIGH"
             self._pos.position = -0.6
 
-    def go(self, *args, **kwargs):
+    def go(self, check_feasibility=True, *args, **kwargs):
+        '''
+        Set the sub's waypoint to _pose
+        @param check_feasibility Check that goal is 'feasibile' and correct otherwise, see check_goal
+        @return Defer object for action client to complete this move. yield on this to wait for move to complete
+        '''
         if self.print_only:
             print self._pose
             return self._sub.nh.sleep(0.1)
 
-        self.check_goal()
+        if check_feasibility:
+            self.check_goal()
 
         goal = self._sub._moveto_action_client.send_goal(self._pose.as_MoveToGoal(*args, **kwargs))
         return goal.get_result()

@@ -32,12 +32,12 @@ class CollectClassifyMission(object):
     A brief overview of the flow of the mission:
     * move in the direction of the pinger's heading until a pinger position estimate is available
     * Once pinger position is found, for each of the 4 tower pipers:
-     * Circle around pinget while facing tower looking for a pipe
+     * Circle around pinger while facing tower looking for a pipe
      * Once a pipe is found, grab pipe with gripper arm
      * backup and surface with pipe in gripper arm
      * submerge to depth above tower
      * If no ovals have been found:
-       * Circle around octogon (large radius around pinger) until an oval on the table is found
+       * Circle around octagon (large radius around pinger) until an oval on the table is found
      * Move above a previously found oval
      * Circle around oval table to find oval with same color as pipe in gripper
      * Once oval is found: move on top of oval and aligned with the longer axis
@@ -49,11 +49,12 @@ class CollectClassifyMission(object):
     BLIND = True
     BASE_LINK_TO_ARM = np.array([0, 0, 0])  # Transformation from base_link to claw of arm mechanism
     COLORS = ['red', 'green', 'orange', 'blue']
-    PIPE_SEARCH_HEIGHT = 0.6096  # Distance above ground to circle tower to find pipes, meters to dvl
+    PIPE_SEARCH_HEIGHT = 0.6096  # Distance above ground to circle tower to find pipes, meters to DVL
     PIPE_SEARCH_RADIUS = 2.0  # Radius in meters around pinger to circle tower to find pipes
-    OVAL_SEARCH_HEIGHT = 1.524  # Distance above ground to look for oval table, meters from ground to dvl
-    OVAL_DROP_HEIGHT = 1.0  # Height to drop pipe onto table, meters from ground to dvl
-    OCTOGON_RADIUS = 2.7  # Radius of octogon from rules, meters
+    OVAL_SEARCH_HEIGHT = 1.524  # Distance above ground to look for oval table, meters from ground to DVL
+    OVAL_DROP_HEIGHT = 1.0  # Height to drop pipe onto table, meters from ground to DVL
+    OCTOGON_RADIUS = 2.7  # Radius of octagon from rules, meters
+    SAFE_SPEED = 0.3  # Proportion of sub's max speed to execute moves where collisions are possible (grabbing pipe)
 
     def __init__(self, sub):
         self.sub = sub
@@ -67,12 +68,6 @@ class CollectClassifyMission(object):
 
         self.print_bad = FprintFactory(title=MISSION, msg_color="red").fprint
         self.print_good = FprintFactory(title=MISSION, msg_coolr="green").fprint
-
-    def height_to_depth(self, height):
-        '''
-        Uses dvl to convert a height over ground to a depth
-        '''
-        return -self.sub.move.to_height(height)._pose.position[2]
 
     @staticmethod
     def vision_response_to_pose(res):
@@ -131,26 +126,9 @@ class CollectClassifyMission(object):
         Surface sub at current position, wait a few seconds,
         then submerge again.
         '''
-        yield self.sub.move.depth(0).go()
-        yield self.sub.nh.sleep(2.0).go()
-        depth = self.height_to_depth(CollectClassifyMission.OVAL_SEARCH_HEIGHT)
-        yield self.sub.move.depth(depth).go()
-
-    @util.cancellableInlineCallbacks
-    def circle(self, origin, radius, num_moves=10, proportion=1.0):
-        '''
-        Execute discrete moves to circle around a point while looking at the point.
-        '''
-        depth = -origin[2]
-        start_move = self.sub.move.look_at(origin).set_position(origin).backward(radius).depth(depth)
-        start_position = start_move._pose.position
-        yield start_move.go()
-        offset = start_position - origin
-        start_theta = np.arctan2(offset[1], offset[0])
-        for theta in np.linspace(start_theta, proportion * 2.0 * np.pi + start_theta, num=num_moves):
-            d = np.array([radius * np.cos(theta), radius * np.sin(theta), 0])
-            p = origin + d
-            yield self.sub.move.set_position(p).look_at_without_pitching(self.pinger_position).go()
+        yield self.sub.move.depth(0).go(check_feasibility=False)
+        yield self.sub.nh.sleep(2.0)
+        yield self.sub.move.to_height(CollectClassifyMission.OVAL_SEARCH_HEIGHT).go()
 
     @util.cancellableInlineCallbacks
     def find_pipe(self):
@@ -163,9 +141,8 @@ class CollectClassifyMission(object):
 
         @util.cancellableInlineCallbacks
         def circle_pinger():
-            origin = self.pinger_position
-            origin[2] = -self.height_to_depth(self.PIPE_SEARCH_HEIGHT)
-            yield self.circle(origin, CollectClassifyMission.PIPE_SEARCH_RADIUS)
+            yield self.sub.move.to_height(CollectClassifyMission.PIPE_SEARCH_HEIGHT).circle(
+                self.pinger_position, CollectClassifyMission.PIPE_SEARCH_RADIUS)
             self.circle_done = True
         search = circle_pinger()
         while not circle_done:
@@ -202,10 +179,10 @@ class CollectClassifyMission(object):
 
         # Move forward
         move = move.forward(1.0)
-        yield move.go()
+        yield move.go(speed=CollectClassifyMission.SAFE_SPEED)
         yield self.sub.acutators.gripper_close()  # Close arm around pipe
 
-        yield self.sub.move.up(2.0).go()  # move up to lift pipe
+        yield self.sub.move.up(2.0).go(speed=CollectClassifyMission.SAFE_SPEED)  # move up to lift pipe
 
     @util.cancellableInlineCallbacks
     def get_oval(self):
@@ -242,20 +219,18 @@ class CollectClassifyMission(object):
     @util.cancellableInlineCallbacks
     def find_first_oval(self):
         '''
-        Circle at octogon radius around pinger to find the oval table.
+        Circle at octagon radius around pinger to find the oval table.
         If an oval has already been found or if one is found during search pattern,
         return True. Otherwise, return False.
         '''
         if len(self.ovals_found) > 0:
             defer.returnValue(True)
-
-        origin = self.pinger_position
-        origin[2] = -self.height_to_depth(CollectClassifyMission.OVAL_SEARCH_HEIGHT)
         circle_done = False
 
         @util.cancellableInlineCallbacks
         def circle():
-            yield self.circle(origin, CollectClassifyMission.OCTOGON_RADIUS)
+            yield self.sub.move.to_height(CollectClassifyMission.OVAL_SEARCH_HEIGHT).circle(
+                self.pinger_position, CollectClassifyMission.OCTOGON_RADIUS)
             circle_done = True  # noqa
 
         search = circle()
@@ -276,14 +251,13 @@ class CollectClassifyMission(object):
         If correct color oval not found after search pattern, return pose of a random
         found oval. If still no ovals are found, return None.
         '''
-        # Enable oval pereption
+        # Enable oval perception
         yield self.sub.vision_proxies.table_ovals.start()
 
         # Go to safe depth so we don't hit tower
-        depth = self.height_to_depth(CollectClassifyMission.OVAL_SEARCH_HEIGHT)
-        yield self.sub.move.depth(depth).go()
+        yield self.sub.move.to_height(CollectClassifyMission.OVAL_SEARCH_HEIGHT).go()
 
-        # Circle outside octogon to find table if no ovals found yet
+        # Circle outside octagon to find table if no ovals found yet
         table_found = yield self.find_first_oval()
         if not table_found:
             yield self.sub.vision_proxies.table_ovals.stop()
@@ -301,8 +275,8 @@ class CollectClassifyMission(object):
         def search_table():
             assert len(self.ovals_found) != 0
             start = self.ovals_found[np.random.randint(0, len(self.oval_found))].pose[0]
-            start[2] = -self.height_to_depth(CollectClassifyMission.OVAL_SEARCH_HEIGHT)
-            yield self.circle(start, CollectClassifyMission.TABLE_RADIUS)
+            yield self.sub.move.to_height(CollectClassifyMission.OVAL_SEARCH_HEIGHT).circle(
+                start, CollectClassifyMission.TABLE_RADIUS)
             search_done = True  # noqa
 
         while not search_done:
@@ -326,14 +300,12 @@ class CollectClassifyMission(object):
         to drop pipe onto circle.
         '''
         # Move at safe depth above oval
-        position = pose[0]
-        position = position + CollectClassifyMission.BASE_LINK_TO_ARM
-        position[2] = -self.height_to_depth(CollectClassifyMission.OVAL_SEARCH_HEIGHT)
-        yield self.sub.move.set_position(position).set_orientation(pose[1]).zero_roll_and_pitch()
+        yield self.sub.move.set_position(pose[0] + CollectClassifyMission.BASE_LINK_TO_ARM).to_height(
+            CollectClassifyMission.OVAL_SEARCH_HEIGHT).set_orientation(pose[1]).zero_roll_and_pitch().go()
 
-        # Desend to right above oval
-        position[2] = -self.height_to_depth(CollectClassifyMission.OVAL_DROP_HEIGHT)
-        yield self.sub.move.set_position(position).set_orientation(pose[1]).zero_roll_and_pitch()
+        # Descend to right above oval
+        yield self.sub.move.to_height(CollectClassifyMission.OVAL_DROP_HEIGHT).go(
+            speed=CollectClassifyMission.SAFE_SPEED)
 
         # Release grabber
         yield self.sub.actuators.gripper_open()
@@ -343,8 +315,8 @@ class CollectClassifyMission(object):
         '''
         1) Circle pinger looking for a remaining pipe
         2) Grab pipe, backup
-        3) Surface with pipe without leaving octogon
-        4) Submerge and search for corosponding oval
+        3) Surface with pipe without leaving octagon
+        4) Submerge and search for corresponding oval
         5) release pipe onto correct oval or a random one if not found
         '''
         pipe = yield self.find_pipe()  # Run pattern to get a remaining pipe's pose
@@ -358,7 +330,7 @@ class CollectClassifyMission(object):
             pipe_index = self.pipes_found.index(pipe)
             self.pipes_found[pipe_index].taken = True
         except ValueError:
-            self.print_bad('Could not set pipe taken, this shouldnt happen.')
+            self.print_bad("Could not set pipe taken, this shouldn't happen.")
         self.print_good('Surfacing with {} pipe'.format(pipe.color))
         yield self.surface()
         self.print_good('Searching for {} oval'.format(pipe.color))
@@ -373,7 +345,7 @@ class CollectClassifyMission(object):
             oval_index = self.ovals_found.index(oval)
             self.ovals_found[oval_index].full = True
         except ValueError:
-            self.print_bad('Could not set oval full, this shouldnt happen.')
+            self.print_bad("Could not set oval full, this shouldn't happen.")
         self.print_good('{} collected and classified'.format(oval.color))
         defer.returnValue(True)
 
