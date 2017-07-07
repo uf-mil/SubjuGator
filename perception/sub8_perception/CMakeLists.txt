@@ -110,4 +110,23 @@ target_link_libraries(
     ${OpenCV_INCLUDE_DIRS}
 )
 
+add_executable(
+  navigation_gate
+    nodes/navigation_gate_node.cpp
+    src/sub8_perception/navigation_gate.cpp
+    src/sub8_vision_lib/stereo_base.cpp
+)
+add_dependencies(
+  navigation_gate
+   sub8_msgs_generate_messages_cpp
+   ${catkin_EXPORTED_TARGETS}
+)
+target_link_libraries(
+  navigation_gate
+    sub8_vision_lib
+    ${catkin_LIBRARIES}
+    ${Boost_LIBRARIES}
+    ${OpenCV_INCLUDE_DIRS}
+)
+
 add_subdirectory(test)
