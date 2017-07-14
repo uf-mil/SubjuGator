@@ -375,7 +375,7 @@ class PoseSequenceCommander(object):
         Each is realive to the sub's pose folloing the previous
         pose command.
         '''
-        #Calculates absolute waypoints at the start to avoid accumulating error
+        # Calculates absolute waypoints at the start to avoid accumulating error
         start_pose = self.sub.pose
         tracker_pose = start_pose
         for i in xrange(len(positions)):
@@ -383,13 +383,14 @@ class PoseSequenceCommander(object):
             positions[i][0:3] = tracker_pose.relative(positions[i][0:3]).position
             tracker_pose.position = positions[i][0:3]
             orientations[i][0:3] = euler_from_quaternion(quaternion_multiply(
-                    tracker_pose.orientation,
-                    quaternion_from_euler(orientations[i][0], orientations[i][1], orientations[i][2])))
+                tracker_pose.orientation,
+                quaternion_from_euler(orientations[i][0], orientations[i][1], orientations[i][2])))
             tracker_pose.orientation = quaternion_from_euler(orientations[i][0], orientations[i][1], orientations[i][2])
         for i in xrange(len(positions)):
 
             yield self.sub.move.set_position(np.array(positions[i][0:3])).go()
-            yield self.sub.move.set_orientation(quaternion_from_euler(orientations[i][0], orientations[i][1], orientations[i][2])).go()
+            yield self.sub.move.set_orientation(
+                quaternion_from_euler(orientations[i][0], orientations[i][1], orientations[i][2])).go()
 
     @util.cancellableInlineCallbacks
     def go_to_sequence_quaternions(self, positions, orientations):
@@ -403,14 +404,15 @@ class PoseSequenceCommander(object):
             positions[i][0:3] = tracker_pose.relative(positions[i][0:3]).position
             tracker_pose.position = positions[i][0:3]
             orientations[i][0:4] = quaternion_multiply(
-                    tracker_pose.orientation,
-                    [orientations[i][0], orientations[i][1], orientations[i][2], orientations[i][3]])
+                tracker_pose.orientation,
+                [orientations[i][0], orientations[i][1], orientations[i][2], orientations[i][3]])
             tracker_pose.orientation = orientations[i][0:4]
 
         for i in xrange(len(positions)):
 
             yield self.sub.move.set_position(np.array(positions[i][0:3])).go()
-            yield self.sub.move.set_orientation([orientations[i][0], orientations[i][1], orientations[i][2], orientations[i][3]]).go()
+            yield self.sub.move.set_orientation(
+                [orientations[i][0], orientations[i][1], orientations[i][2], orientations[i][3]]).go()
 
 
 _subs = {}
