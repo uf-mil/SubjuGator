@@ -13,7 +13,7 @@ from mil_msgs.srv import SetGeometry, SetGeometryRequest
 from sub8_msgs.srv import SetValve, SetValveRequest
 from std_srvs.srv import SetBool, SetBoolRequest
 from nav_msgs.msg import Odometry
-from tf.transformations import quaternion_multiply, quaternion_from_euler
+from tf.transformations import quaternion_multiply, quaternion_from_euler, euler_from_quaternion
 
 import numpy as np
 from twisted.internet import defer
@@ -370,32 +370,47 @@ class PoseSequenceCommander(object):
         self.sub = sub
 
     @util.cancellableInlineCallbacks
-    def go_to_sequence_eulers(self, positions, orientations, speed=0.2):
+    def go_to_sequence_eulers(self, positions, orientations):
         '''Pass a list of positions and orientations (euler).
         Each is realive to the sub's pose folloing the previous
         pose command.
         '''
+        #Calculates absolute waypoints at the start to avoid accumulating error
+        start_pose = self.sub.pose
+        tracker_pose = start_pose
         for i in xrange(len(positions)):
-            yield self.sub.move.look_at_without_pitching(np.array(positions[i][0:3])).go(speed)
-            yield self.sub.move.relative(np.array(positions[i][0:3])).go(speed)
-            yield self.sub.move.set_orientation(
-                quaternion_multiply(
-                    self.sub.pose.orientation,
-                    quaternion_from_euler(orientations[i][0], orientations[i][1], orientations[i][2]))).go(speed)
+
+            positions[i][0:3] = tracker_pose.relative(positions[i][0:3]).position
+            tracker_pose.position = positions[i][0:3]
+            orientations[i][0:3] = euler_from_quaternion(quaternion_multiply(
+                    tracker_pose.orientation,
+                    quaternion_from_euler(orientations[i][0], orientations[i][1], orientations[i][2])))
+            tracker_pose.orientation = quaternion_from_euler(orientations[i][0], orientations[i][1], orientations[i][2])
+        for i in xrange(len(positions)):
+
+            yield self.sub.move.set_position(np.array(positions[i][0:3])).go()
+            yield self.sub.move.set_orientation(quaternion_from_euler(orientations[i][0], orientations[i][1], orientations[i][2])).go()
 
     @util.cancellableInlineCallbacks
-    def go_to_sequence_quaternions(self, positions, orientations, speed=0.2):
+    def go_to_sequence_quaternions(self, positions, orientations):
         '''Pass a list of positions and orientations (quaternion).
         Each is realive to the sub's pose folloing the previous
         pose command.
         '''
+        start_pose = self.sub.pose
+        tracker_pose = start_pose
         for i in xrange(len(positions)):
-            yield self.sub.move.look_at_without_pitching(np.array(positions[i][0:3])).go(speed)
-            yield self.sub.move.relative(np.array(positions[i][0:3])).go(speed)
-            yield self.sub.move.set_orientation(
-                quaternion_multiply(
-                    self.sub.pose.orientation,
-                    (orientations[i][0], orientations[i][1], orientations[i][2], orientations[i][3]))).go(speed)
+            positions[i][0:3] = tracker_pose.relative(positions[i][0:3]).position
+            tracker_pose.position = positions[i][0:3]
+            orientations[i][0:4] = quaternion_multiply(
+                    tracker_pose.orientation,
+                    [orientations[i][0], orientations[i][1], orientations[i][2], orientations[i][3]])
+            tracker_pose.orientation = orientations[i][0:4]
+
+        for i in xrange(len(positions)):
+
+            yield self.sub.move.set_position(np.array(positions[i][0:3])).go()
+            yield self.sub.move.set_orientation([orientations[i][0], orientations[i][1], orientations[i][2], orientations[i][3]]).go()
 
 
 _subs = {}
