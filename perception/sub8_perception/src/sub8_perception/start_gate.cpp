@@ -175,23 +175,23 @@ cv::Mat Sub8StartGateDetector::process_image(cv::Mat &image)
   cv::Mat hsv;
   cv::cvtColor(image, hsv, cv::COLOR_BGR2HSV);
 
-  cv::Mat bitwised_image;
-  {
-    cv::Mat lab_channels[3];
-    cv::split(lab, lab_channels);
-    cv::Mat hsv_channels[3];
-    cv::split(hsv, hsv_channels);
-    cv::bitwise_and(lab_channels[1], hsv_channels[0], bitwised_image);
-  }
+  cv::Mat lab_channels[3];
+  cv::split(lab, lab_channels);
+
+  cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
+  clahe->setClipLimit(10);
+  clahe->setTilesGridSize(cv::Size(16, 16));
+  cv::Mat dst;
+  clahe->apply(lab_channels[0], dst);
 
   cv::Mat processed_image;
-  cv::blur(bitwised_image, processed_image, cv::Size(blur_size_, blur_size_));
+  cv::blur(dst, processed_image, cv::Size(blur_size_, blur_size_));
 
   cv::Mat canny;
   cv::Canny(processed_image, canny, canny_low_, canny_low_ * 3.0);
 
-  // sensor_msgs::ImagePtr dbg_img_msg_canny = cv_bridge::CvImage(std_msgs::Header(), "mono8", canny).toImageMsg();
-  // debug_image_pub_canny_.publish(dbg_img_msg_canny);
+  sensor_msgs::ImagePtr dbg_img_msg_canny = cv_bridge::CvImage(std_msgs::Header(), "mono8", canny).toImageMsg();
+  debug_image_pub_canny_.publish(dbg_img_msg_canny);
 
   cv::Mat closing;
   cv::morphologyEx(canny, closing, cv::MORPH_CLOSE, kernal);
