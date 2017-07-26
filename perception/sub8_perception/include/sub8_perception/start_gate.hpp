@@ -64,6 +64,9 @@ private:
   bool set_active_enable_cb(std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res);
   bool vision_request_cb(sub8_msgs::VisionRequest::Request &req, sub8_msgs::VisionRequest::Response &resp);
 
+  image_transport::ImageTransport image_transport_;
+  image_transport::Publisher debug_image_pub_canny_;
+
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener tf_listener_;
   geometry_msgs::TransformStamped transform_to_map_;

@@ -1,5 +1,5 @@
 #include <sub8_perception/start_gate.hpp>
-Sub8StartGateDetector::Sub8StartGateDetector() : nh("~"), timeout_for_found_(2), tf_listener_(tf_buffer_)
+Sub8StartGateDetector::Sub8StartGateDetector() : nh("~"), timeout_for_found_(2), image_transport_(nh), tf_listener_(tf_buffer_)
 {
   // Start the camera streamers
   left_cam_stream_ = std::unique_ptr<ROSCameraStream_Vec3>(new ROSCameraStream_Vec3(nh, 1));
@@ -15,9 +15,9 @@ Sub8StartGateDetector::Sub8StartGateDetector() : nh("~"), timeout_for_found_(2),
   left_cam_stream_->init(left);
   right_cam_stream_->init(right);
 
-  canny_low_ = nh.param<int>("canny_low_", 100);
+  canny_low_ = nh.param<int>("canny_low_", 30);
   canny_ratio_ = nh.param<int>("canny_ratio_", 3.0);
-  blur_size_ = nh.param<int>("blur_size_", 1);
+  blur_size_ = nh.param<int>("blur_size_", 7);
   dilate_amount_ = nh.param<int>("dilate_amount_", 3);
 
   // Should node be processing image
@@ -31,6 +31,7 @@ Sub8StartGateDetector::Sub8StartGateDetector() : nh("~"), timeout_for_found_(2),
 
   // Visualization
   marker_pub_ = nh.advertise<visualization_msgs::Marker>("visualization_marker", 1, true);
+  debug_image_pub_canny_ = image_transport_.advertise("canny", 1);
 
   // Service providers for VisionProxy
   vision_request_service_ =
@@ -185,7 +186,8 @@ cv::Mat Sub8StartGateDetector::process_image(cv::Mat &image)
   clahe->apply(lab_channels[0], dst);
 
   cv::Mat processed_image;
-  cv::blur(dst, processed_image, cv::Size(blur_size_, blur_size_));
+  // cv::blur(dst, processed_image, cv::Size(blur_size_, blur_size_));
+  cv::medianBlur(dst, processed_image, blur_size_);
 
   cv::Mat canny;
   cv::Canny(processed_image, canny, canny_low_, canny_low_ * 3.0);

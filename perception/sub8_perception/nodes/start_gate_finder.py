@@ -77,7 +77,10 @@ class StartGateFinder():
 
 
 	def _get_edges(self, image):
-		image = cv2.blur(image, (5, 5))
+		img = image
+		# image = cv2.blur(image, (5, 5))
+		image = cv2.medianBlur(image, 7)
+
 		# _, blur = cv2.threshold(blur,140,255,cv2.THRESH_TRUNC)
 		# cv2.imshow("blur", blur)
 		# cv2.imshow("img", self.last_lab)
@@ -85,13 +88,20 @@ class StartGateFinder():
 		# cv2.imshow("blur", image)
 		# 
 		kernel = np.ones((5,5),np.uint8)
-		canny = cv2.Canny(image, 35, 35*3)
+		canny = cv2.Canny(image, 30, 30*3)
 		cv2.imshow("sijdis", canny)
+		# lines = cv2.HoughLinesP(canny, 1, np.pi/2, 2, minLineLength = 620, maxLineGap = 100)[0].tolist()
+
+
+		# cv2.imshow("lines", img)
 		closing = cv2.morphologyEx(canny, cv2.MORPH_CLOSE, kernel)
 		dilation = cv2.dilate(canny,kernel,iterations = 3)
+
+
 		# cv2.imshow("dial", dilation)
 		conc_black = np.concatenate((canny, closing, dilation), axis=1)
 		self.image_pub_black.publish(self.bridge.cv2_to_imgmsg(conc_black, "mono8"))
+
 		return dilation
 
 	def _img_callback_a(self, img):
@@ -110,7 +120,6 @@ class StartGateFinder():
 		#image_hsv_s = image_hsv[:,:,0]
 		# image = cv2.bitwise_or(image_lab_a, image_bgr_g)
 		# image = cv2.bitwise_or(im_bw, img[:,:,1])
-		# cv2.imshow("sidjsid", image_ycr[:,:,2])
 
 		image = cv2.cvtColor(image_ycr,cv2.COLOR_YCrCb2BGR);
 		self.image_pub_equalize.publish(image)
@@ -129,9 +138,12 @@ class StartGateFinder():
 		# cv2.imshow("threshold", image)
 		image = cl
 		#-----Merge the CLAHE enhanced L-channel with the a and b channel-----------
-		# limg = cv2.merge((cl,a,b))
+		limg = cv2.merge((cl,a,b))
 		#-----Converting image from LAB Color model to RGB model--------------------
-		# image = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+		image_clahe = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+		image_b = cv2.medianBlur(image_clahe,5)
+		cv2.imshow("original", image_clahe)
+		cv2.imshow("blur", image_b)
 		# cv2.imshow('final', image)
 
 		# cv2.imshow("gray", im_bw)
