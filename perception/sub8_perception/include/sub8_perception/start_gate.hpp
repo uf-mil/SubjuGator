@@ -66,6 +66,9 @@ private:
 
   image_transport::ImageTransport image_transport_;
   image_transport::Publisher debug_image_pub_canny_;
+  image_transport::Publisher debug_image_pub_bgr_;
+
+  cv::Mat debug_image_bgr_;
 
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener tf_listener_;

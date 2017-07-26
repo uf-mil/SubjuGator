@@ -32,6 +32,7 @@ Sub8StartGateDetector::Sub8StartGateDetector() : nh("~"), timeout_for_found_(2),
   // Visualization
   marker_pub_ = nh.advertise<visualization_msgs::Marker>("visualization_marker", 1, true);
   debug_image_pub_canny_ = image_transport_.advertise("canny", 1);
+  debug_image_pub_bgr_ = image_transport_.advertise("bgr", 1);
 
   // Service providers for VisionProxy
   vision_request_service_ =
@@ -44,6 +45,7 @@ Sub8StartGateDetector::Sub8StartGateDetector() : nh("~"), timeout_for_found_(2),
 
 std::vector<cv::Point> Sub8StartGateDetector::get_2d_feature_points(cv::Mat image)
 {
+  debug_image_bgr_ = image;
   // Filter the image
   cv::Mat processed_image = process_image(image);
 
@@ -106,6 +108,7 @@ void Sub8StartGateDetector::determine_start_gate_position()
   auto pose_ptr = get_3d_pose(*feature_pts_3d_ptr);
   if (pose_ptr)
   {
+    std::cout << "found" << std::endl;
     auto pose = *pose_ptr;
     gate_pose_ = update_kalman_filter(pose);
     gate_found_ = true;
@@ -187,19 +190,53 @@ cv::Mat Sub8StartGateDetector::process_image(cv::Mat &image)
 
   cv::Mat processed_image;
   // cv::blur(dst, processed_image, cv::Size(blur_size_, blur_size_));
-  cv::medianBlur(dst, processed_image, blur_size_);
+  cv::medianBlur(dst, processed_image, 5);
+  // cv::medianBlur(dst, processed_image, blur_size_);
 
   cv::Mat canny;
-  cv::Canny(processed_image, canny, canny_low_, canny_low_ * 3.0);
-
-  sensor_msgs::ImagePtr dbg_img_msg_canny = cv_bridge::CvImage(std_msgs::Header(), "mono8", canny).toImageMsg();
-  debug_image_pub_canny_.publish(dbg_img_msg_canny);
+  cv::Canny(processed_image, canny, 60, 60 * 3);
 
   cv::Mat closing;
   cv::morphologyEx(canny, closing, cv::MORPH_CLOSE, kernal);
 
   cv::Mat dilation;
-  cv::dilate(closing, dilation, kernal, cv::Point(), dilate_amount_);
+  cv::dilate(closing, dilation, kernal, cv::Point(), 4);
+
+  std::vector<cv::Vec4i> lines_vertical;
+  cv::HoughLinesP(dilation, lines_vertical, 1, CV_PI, 150, 70, 80);
+
+  cv::Mat img_line_mask = cv::Mat::zeros(image.size(), CV_8U);
+  for(size_t i = 0; i < lines_vertical.size(); i++)
+  {
+    cv::Vec4i l = lines_vertical[i];
+    double angle = atan2(l[0]-l[2], l[1] - l[3]) * 180 / CV_PI;
+    if (abs(angle) > 20 && abs(angle) < 70) continue;
+    cv::line(img_line_mask, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]), cv::Scalar(255), 1, CV_AA);
+  }
+
+  cv::Mat canny_mask;
+  cv::Canny(img_line_mask, canny_mask, 10, 10 * 3);
+  cv::Mat dilation_mask;
+  cv::dilate(canny_mask, dilation_mask, kernal, cv::Point(), 2);
+
+  std::vector<std::vector<cv::Point>> contour;
+  std::vector<cv::Vec4i> hierarchy;
+  cv::findContours(dilation_mask, contour, hierarchy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE, cv::Point(-1, -1));
+
+  for (size_t i = 0; i < contour.size(); ++i)
+  {
+    std::vector<cv::Point> features;
+    auto epsilon = 0.1 * cv::arcLength(contour.at(i), true);
+    cv::approxPolyDP(contour.at(i), features, epsilon, true);
+    std::vector<std::vector<cv::Point>> contourz = {features};
+    cv::drawContours(debug_image_bgr_, contourz, -1, cv::Scalar(0, 255, 0), 2, 8);
+  }
+
+
+  sensor_msgs::ImagePtr dbg_img_msg_canny = cv_bridge::CvImage(std_msgs::Header(), "mono8", dilation_mask).toImageMsg();
+  debug_image_pub_canny_.publish(dbg_img_msg_canny);
+  sensor_msgs::ImagePtr dbg_img_msg_bgr = cv_bridge::CvImage(std_msgs::Header(), "bgr8", debug_image_bgr_).toImageMsg();
+  debug_image_pub_bgr_.publish(dbg_img_msg_bgr);
 
   return dilation;
 }
@@ -262,6 +299,7 @@ std::vector<cv::Point> Sub8StartGateDetector::contour_to_2d_features(std::vector
       // Match the contour with a polygon
       auto epsilon = 0.01 * cv::arcLength(contour.at(i), true);
       cv::approxPolyDP(contour.at(i), features, epsilon, true);
+      cv::drawContours(debug_image_bgr_, contour, i, cv::Scalar(0, 0, 255), 2, 8);
     }
   }
   return features;
