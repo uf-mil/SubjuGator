@@ -44,7 +44,7 @@ private:
   // Helper function that checks if a contour is of a gate shape
   bool valid_contour(std::vector<cv::Point> &contour);
   // Helper function that does a blur and filters
-  cv::Mat process_image(cv::Mat &image);
+  std::vector<cv::Point> process_image(cv::Mat &image);
   // Given an array of contours, returns a polygon that is most similar to that of a gate
   std::vector<cv::Point> contour_to_2d_features(std::vector<std::vector<cv::Point>> &contour);
   // Given a set of points, find the center points between the closest point pairs

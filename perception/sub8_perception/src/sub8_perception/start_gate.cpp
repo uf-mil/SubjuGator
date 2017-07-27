@@ -47,21 +47,23 @@ std::vector<cv::Point> Sub8StartGateDetector::get_2d_feature_points(cv::Mat imag
 {
   debug_image_bgr_ = image;
   // Filter the image
-  cv::Mat processed_image = process_image(image);
+  // cv::Mat processed_image = process_image(image);
 
   // Find contours
-  std::vector<std::vector<cv::Point>> contours;
-  std::vector<cv::Vec4i> hierarchy;
-  cv::findContours(processed_image, contours, hierarchy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE, cv::Point(-1, -1));
+  // std::vector<std::vector<cv::Point>> contours;
+  // std::vector<cv::Vec4i> hierarchy;
+  // cv::findContours(processed_image, contours, hierarchy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE, cv::Point(-1, -1));
 
-  // Find contour that closely matches a gate
-  std::vector<cv::Point> features = contour_to_2d_features(contours);
+  // // Find contour that closely matches a gate
+  // std::vector<cv::Point> features = contour_to_2d_features(contours);
 
-  // Ignore if we don't get enough feature points for the gate
-  if (features.size() < 5)
+  std::vector<cv::Point> features = process_image(image);
+  // // Ignore if we don't get enough feature points for the gate
+  if (features.size() < 4)
     return {};
 
-  return get_corner_center_points(features);
+return features;
+  // return get_corner_center_points(features);
 }
 
 void Sub8StartGateDetector::run()
@@ -101,7 +103,7 @@ void Sub8StartGateDetector::determine_start_gate_position()
   if (!is_stereo_coherent())
     return;
 
-  auto feature_pts_3d_ptr = get_3d_feature_points();
+  auto feature_pts_3d_ptr = get_3d_feature_points(15);
   if (!feature_pts_3d_ptr)
     return;
   // Use inherited function to find 3d points and then estimate a pose
@@ -169,7 +171,7 @@ std::vector<cv::Point> Sub8StartGateDetector::get_corner_center_points(const std
   return features_l;
 }
 
-cv::Mat Sub8StartGateDetector::process_image(cv::Mat &image)
+std::vector<cv::Point>  Sub8StartGateDetector::process_image(cv::Mat &image)
 {
   cv::Mat kernal = cv::Mat::ones(5, 5, CV_8U);
 
@@ -203,7 +205,7 @@ cv::Mat Sub8StartGateDetector::process_image(cv::Mat &image)
   cv::dilate(closing, dilation, kernal, cv::Point(), 4);
 
   std::vector<cv::Vec4i> lines_vertical;
-  cv::HoughLinesP(dilation, lines_vertical, 1, CV_PI, 150, 70, 80);
+  cv::HoughLinesP(dilation, lines_vertical, 1, CV_PI, 150, 100, 1);
 
   cv::Mat img_line_mask = cv::Mat::zeros(image.size(), CV_8U);
   for(size_t i = 0; i < lines_vertical.size(); i++)
@@ -221,24 +223,49 @@ cv::Mat Sub8StartGateDetector::process_image(cv::Mat &image)
 
   std::vector<std::vector<cv::Point>> contour;
   std::vector<cv::Vec4i> hierarchy;
-  cv::findContours(dilation_mask, contour, hierarchy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE, cv::Point(-1, -1));
+  cv::findContours(dilation_mask, contour, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE, cv::Point(-1, -1));
+  std::vector<cv::Point> return_features;
+  if (contour.size() > 1)
+  { 
+  int largestIndex = 0;
+  int secondLargestIndex = 1;
 
-  for (size_t i = 0; i < contour.size(); ++i)
+  std::sort(contour.begin(), contour.end(), [](const std::vector<cv::Point> &a, const std::vector<cv::Point> &b) -> bool
   {
-    std::vector<cv::Point> features;
-    auto epsilon = 0.1 * cv::arcLength(contour.at(i), true);
-    cv::approxPolyDP(contour.at(i), features, epsilon, true);
-    std::vector<std::vector<cv::Point>> contourz = {features};
-    cv::drawContours(debug_image_bgr_, contourz, -1, cv::Scalar(0, 255, 0), 2, 8);
+    return cv::contourArea(a) < cv::contourArea(b);
+  });
+
+  
+  cv::Point extBot0   = *std::max_element(contour.at(largestIndex).begin(), contour.at(largestIndex).end(),
+                        [](const cv::Point& lhs, const cv::Point& rhs) {
+                            return lhs.y < rhs.y;
+                    });
+  cv::Point extBot1   = *std::max_element(contour.at(secondLargestIndex).begin(), contour.at(secondLargestIndex).end(),
+                        [](const cv::Point& lhs, const cv::Point& rhs) {
+                            return lhs.y < rhs.y;
+                    });
+   if (abs(extBot0.y - extBot1.y) < 20)
+   {
+      drawContours(debug_image_bgr_, contour, largestIndex, cv::Scalar(0,0,255), 1, 8);
+      drawContours(debug_image_bgr_, contour, secondLargestIndex, cv::Scalar(0,255,0), 1, 8);
+      
+      return_features.push_back(extBot0);
+      return_features.push_back(extBot1);
+      return_features.push_back(cv::Point(extBot0.x, extBot0.y - 100));
+      return_features.push_back(cv::Point(extBot1.x, extBot1.y - 100));
+      cv::circle(debug_image_bgr_, return_features[0], 8, cv::Scalar(0,255,0), -1);
+      cv::circle(debug_image_bgr_, return_features[1], 8, cv::Scalar(0,255,255), -1);
+      cv::circle(debug_image_bgr_, return_features[2], 8, cv::Scalar(0,255,0), -1);
+      cv::circle(debug_image_bgr_, return_features[3], 8, cv::Scalar(0,255,255), -1);
+   }
+
   }
-
-
   sensor_msgs::ImagePtr dbg_img_msg_canny = cv_bridge::CvImage(std_msgs::Header(), "mono8", dilation_mask).toImageMsg();
   debug_image_pub_canny_.publish(dbg_img_msg_canny);
   sensor_msgs::ImagePtr dbg_img_msg_bgr = cv_bridge::CvImage(std_msgs::Header(), "bgr8", debug_image_bgr_).toImageMsg();
   debug_image_pub_bgr_.publish(dbg_img_msg_bgr);
 
-  return dilation;
+  return return_features;
 }
 
 double Sub8StartGateDetector::get_angle(cv::Point a, cv::Point b, cv::Point c)

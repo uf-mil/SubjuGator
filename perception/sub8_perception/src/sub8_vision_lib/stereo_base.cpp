@@ -41,12 +41,21 @@ std::unique_ptr<std::vector<Eigen::Vector3d>> StereoBase::get_3d_feature_points(
   features_l = get_2d_feature_points((*left_cam_stream_)[0]->image());
   features_r = get_2d_feature_points((*right_cam_stream_)[0]->image());
 
+  std::cout << features_l << std::endl;
+
   std::vector<int> correspondence_pair_idxs =
       shortest_pair_stereo_matching(features_l, features_r, left_cam_stream_->rows() * 0.02);
-
+  std::cout << features_l.size() << " " << features_r.size() << std::endl;
+  for (int i = 0; i < correspondence_pair_idxs.size(); ++i)
+  {
+    std::cout << correspondence_pair_idxs[i] << std::endl;
+  }
   // Check if we have any undefined correspondence pairs
   if (std::count(correspondence_pair_idxs.begin(), correspondence_pair_idxs.end(), -1) != 0)
+  {
+    std::cout << "no correspondence" << std::endl;
     return nullptr;
+  }
 
   cv::Matx34d left_cam_mat = (*left_cam_stream_)[0]->getCameraModelPtr()->fullProjectionMatrix();
   cv::Matx34d right_cam_mat = (*right_cam_stream_)[0]->getCameraModelPtr()->fullProjectionMatrix();
@@ -70,6 +79,7 @@ std::unique_ptr<std::vector<Eigen::Vector3d>> StereoBase::get_3d_feature_points(
       return nullptr;
     if (pt_3D(2) > max_z)
       return nullptr;
+    std::cout << pt_3D << std::endl << "-------------------------" << std::endl;
     feature_pts_3d.push_back(pt_3D);
   }
   return std::unique_ptr<std::vector<Eigen::Vector3d>>(new std::vector<Eigen::Vector3d>(feature_pts_3d));
@@ -80,7 +90,10 @@ std::unique_ptr<Eigen::Affine3d> StereoBase::get_3d_pose(std::vector<Eigen::Vect
 {
   // Will cause problems if not 4 points
   if (feature_pts_3d.size() != 4)
+  {
+    std::cout << "not enought 3d feature_pts_3d" << std::endl;
     return nullptr;
+  }
   // Ignore if the volume of the 4 points is not close to 0
   Eigen::Matrix3d matrix_of_vectors;
   {
@@ -95,7 +108,10 @@ std::unique_ptr<Eigen::Affine3d> StereoBase::get_3d_pose(std::vector<Eigen::Vect
   }
   // Check if the 4 points form a plane
   if (abs(matrix_of_vectors.determinant()) * 100 > 30)
+  {
+    std::cout << "not a plane" << std::endl;
     return nullptr;
+  }
 
   std::vector<double> plane_constants = best_fit_plane_standard(feature_pts_3d);
 
@@ -107,7 +123,10 @@ std::unique_ptr<Eigen::Affine3d> StereoBase::get_3d_pose(std::vector<Eigen::Vect
 
   // Reject if z is too far off
   if (fabs(plane_unit_normal(2, 0)) < z_vector_min)
+  {
+    std::cout << "z_vector_min" << std::endl;
     return nullptr;
+  }
 
   Eigen::Vector3d pt_on_plane;
   pt_on_plane << 0, 0, -plane_constants[3] / plane_constants[2];

@@ -17,6 +17,7 @@ class StartGateFinder():
 		self.last_bgr = None
 		self.vis = None
 		self.bridge = CvBridge()
+		self.mask_buffer = None
 
 
 	def _get_angle(self, a, b, c):
@@ -92,7 +93,7 @@ class StartGateFinder():
 		dilation = cv2.dilate(canny,kernel,iterations = 4)
 		cv2.imshow("sijdis", dilation)
 		# lines = cv2.HoughLinesP(canny, 1, np.pi/2, 2, minLineLength = 620, maxLineGap = 100)[0].tolist()
-		lines_vertical = cv2.HoughLinesP(dilation, 1, np.pi, threshold=150, minLineLength=70, maxLineGap=80)
+		lines_vertical = cv2.HoughLinesP(dilation, 1, np.pi, threshold=150, minLineLength=100, maxLineGap=1)
 		verts = []
 		try:
 			lines = lines_vertical
@@ -112,12 +113,34 @@ class StartGateFinder():
 		canny_mask = cv2.Canny(img_line_mask, 10, 10*3)
 		cv2.imshow("c_mask", canny_mask)
 		dialte_mask = cv2.dilate(canny_mask,kernel,iterations = 2)
-		_, contours_thresh, _ = cv2.findContours(dialte_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+		_, contours_thresh, hierarchy = cv2.findContours(dialte_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+		areaArray = []
 		for idx, c in enumerate(contours_thresh):
 			epsilon = 0.1*cv2.arcLength(c,True)
 			approx = cv2.approxPolyDP(c,epsilon,True)
-			cv2.drawContours(self.last_bgr, [approx], -1, (0, 0, 200), 3)
+			# cv2.drawContours(self.last_bgr, contours_thresh, idx, (0, 0, 200), 1)
+			area = cv2.contourArea(approx)
+			areaArray.append(area)
+		sorteddata = sorted(zip(areaArray, contours_thresh), key=lambda x: x[0], reverse=True)
+		print len(sorteddata)
+		cv2.drawContours(self.last_bgr, [sorteddata[1][1]], -1, (0, 200, 0), -1)
+		cv2.drawContours(self.last_bgr, [sorteddata[0][1]], -1, (0, 0, 200), -1)
 
+		extLeft = tuple(sorteddata[1][1][sorteddata[1][1][:, :, 0].argmin()][0])
+		extRight = tuple(sorteddata[1][1][sorteddata[1][1][:, :, 0].argmax()][0])
+		extTop = tuple(sorteddata[1][1][sorteddata[1][1][:, :, 1].argmin()][0])
+		extBot0 = tuple(sorteddata[1][1][sorteddata[1][1][:, :, 1].argmax()][0])
+		extBot1 = tuple(sorteddata[0][1][sorteddata[0][1][:, :, 1].argmax()][0])
+
+
+		cv2.circle(self.last_bgr, extBot0, 8, (255, 255, 0), -1)
+		cv2.circle(self.last_bgr, extBot1, 8, (255, 0, 255), -1)
+
+		# if self.mask_buffer is None:
+		# 	self.mask_buffer = img_line_mask
+		# else:
+		# 	self.mask_buffer = cv2.bitwise_and(self.mask_buffer, img_line_mask)
+		# cv2.imshow("mask_buffer", self.mask_buffer)
 		# img_line_mask = cv2.dilate(img_line_mask, kernel, iterations = 6)
 		# test = cv2.bitwise_and(image, img_line_mask)
 		# (minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(test)
