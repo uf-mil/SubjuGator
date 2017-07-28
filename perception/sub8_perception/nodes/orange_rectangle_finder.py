@@ -11,7 +11,7 @@ from mil_ros_tools import numpy_to_point, Image_Publisher, Image_Subscriber, num
 from image_geometry import PinholeCameraModel
 from visualization_msgs.msg import Marker
 from mil_msgs.srv import SetGeometry
-from mil_vision_tools import RectFinder
+from mil_vision_tools import RectFinder, Threshold, ImageMux
 
 __author__ = "Kevin Allen"
 
@@ -51,7 +51,6 @@ class OrangeRectangleFinder():
                                  [0, 0, 0.3]], dtype=np.float)
 
     def __init__(self):
-        self.debug_gui = False
         self.enabled = False
         self.cam = None
 
@@ -59,8 +58,8 @@ class OrangeRectangleFinder():
         self.debug_ros = rospy.get_param("~debug_ros", True)
         self.canny_low = rospy.get_param("~canny_low", 100)
         self.canny_ratio = rospy.get_param("~canny_ratio", 3.0)
-        self.thresh_hue_high = rospy.get_param("~thresh_hue_high", 60)
-        self.thresh_saturation_low = rospy.get_param("~thresh_satuation_low", 100)
+        self.threshold = Threshold.from_param('/color/path_marker')
+        rospy.loginfo(self.threshold)
         self.min_contour_area = rospy.get_param("~min_contour_area", 100)
         self.epsilon_range = rospy.get_param("~epsilon_range", (0.01, 0.1))
         self.epsilon_step = rospy.get_param("~epsilon_step", 0.01)
@@ -99,6 +98,7 @@ class OrangeRectangleFinder():
         self.image_sub = Image_Subscriber(camera, self._img_cb)
         self.camera_info = self.image_sub.wait_for_camera_info()
         assert self.camera_info is not None
+        self.debug_image = ImageMux(size=(self.camera_info.height, self.camera_info.width*2), shape=(1, 2))
         self.cam = PinholeCameraModel()
         self.cam.fromCameraInfo(self.camera_info)
 
@@ -315,15 +315,14 @@ class OrangeRectangleFinder():
         blurring and thresholding for highly saturated orangish objects
         then runs canny on threshold images and returns canny's edges
         '''
-        blur = cv2.blur(self.last_image, (5, 5))
-        hsv = cv2.cvtColor(blur, cv2.COLOR_BGR2HSV)
-        thresh = cv2.inRange(hsv, (0, self.thresh_saturation_low, 0), (self.thresh_hue_high, 255, 255))
-        return cv2.Canny(thresh, self.canny_low, self.canny_low * self.canny_ratio)
+        blur = cv2.blur(self.last_image, (7, 7))
+        self.thresh = self.threshold(blur)
+        return cv2.Canny(self.thresh, self.canny_low, self.canny_low * self.canny_ratio)
 
     def _img_cb(self, img):
         if not self.enabled or self.cam is None:
             return
-        self.last_image = img
+        self.last_image = img.copy()
         edges = self._get_edges()
         _, contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -337,10 +336,9 @@ class OrangeRectangleFinder():
                 if self.debug_ros:
                     cv2.drawContours(self.last_image, contours, idx, (255, 0, 0), 3)
         if self.debug_ros:
-            self.debug_pub.publish(self.last_image)
-        if self.debug_gui:
-            cv2.imshow("debug", self.last_image)
-            cv2.waitKey(5)
+            self.debug_image[0] = self.last_image
+            self.debug_image[1] = self.thresh
+            self.debug_pub.publish(self.debug_image())
 
 if __name__ == '__main__':
     rospy.init_node('orange_rectangle_finder')
