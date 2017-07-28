@@ -6,6 +6,8 @@
     <!-- DOWN CAMERA -->
     <node pkg="nodelet" type="nodelet" name="down_camera_nodelet"
          args="load pointgrey_camera_driver/PointGreyCameraNodelet camera_nodelet_manager" >
+      <param name="auto_exposure" value="false" />
+      <param name="exposure" value="0.5" />
       <param name="frame_id" value="down_left_cam" />
       <param name="serial" value="16292323" />
       <param name="guid" value="00b09d0100eabf6c"/>
