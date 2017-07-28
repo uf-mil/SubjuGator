@@ -15,6 +15,7 @@ from geometry_msgs.msg import Pose2D, PoseStamped, Pose, Point
 from mil_ros_tools import Image_Subscriber, Image_Publisher, rosmsg_to_numpy
 from nav_msgs.msg import Odometry
 from mil_vision_tools import CircleFinder, Threshold
+from copy import copy
 
 
 class Buoy(object):
@@ -84,7 +85,7 @@ class Buoy(object):
 
     def get_observations_and_pose_pairs(self):
         self.clear_old_observations()
-        return (self._observations, self._pose_pairs)
+        return (copy(self._observations), copy(self._pose_pairs))
 
     def size(self):
         return len(self._observations)
@@ -362,7 +363,10 @@ class BuoyFinder(object):
             return False
 
         linear_velocity = rosmsg_to_numpy(self.last_odom.twist.twist.linear)
-        if np.linalg.norm(linear_velocity) > self.max_velocity:
+        angular_velocity = rosmsg_to_numpy(self.last_odom.twist.twist.angular)
+        if np.linalg.norm(linear_velocity) > self.max_velocity or\
+           np.linalg.norm(angular_velocity) > self.max_velocity:
+            rospy.loginfo('moving too fast, ignoring observations')
             return False
 
         return True
