@@ -21,6 +21,9 @@ FACTOR_DISTANCE_AFTER = 3
 
 SPEED = 0.3
 
+GATE_DISTANCE = 12
+TRIES = 10
+
 
 @txros.util.cancellableInlineCallbacks
 def run(sub):
@@ -28,8 +31,8 @@ def run(sub):
 
     # Add search pattern if needed...
     fprint("Moving down a few meter")
-    yield sub.move.depth(0.3).go()
-    search_pattern = [sub.move.forward(10)]
+    yield sub.move.depth(0.3).zero_roll_and_pitch().go()
+    search_pattern = [sub.move.forward(12)]
     search = Searcher(
         sub,
         sub.vision_proxies.start_gate.get_pose,
@@ -37,7 +40,7 @@ def run(sub):
 
     resp = None
     fprint('Searching...')
-    resp = yield search.start_search(loop=False, timeout=50, spotings_req=2, speed=0.3)
+    resp = yield search.start_search(loop=False, timeout=50, spotings_req=3, speed=0.3)
 
     if resp is None or not resp.found:
         fprint("No gate found...", msg_color="red")
@@ -46,50 +49,32 @@ def run(sub):
     position = rosmsg_to_numpy(resp.pose.pose.position)
     orientation = rosmsg_to_numpy(resp.pose.pose.orientation)
 
-    point_before = 0
-    point_after = 0
-
     distance = np.linalg.norm(sub.pose.position - position)
-    while (distance > 1 and resp is not None and resp.found):
+    gate_dst = GATE_DISTANCE - distance
 
-        fprint('Gate\'s position in map is: {}'.format(position))
-        fprint('Gate\'s orientation in map is: {}'.format(orientation))
-        # Get the normal vector, which is assumed to be the [1,0,0] unit vector
-        normal = tf.transformations.quaternion_matrix(
-            orientation).dot(np.array([1, 0, 0, 0]))[0:3]
-        fprint('Computed normal vector: {}'.format(normal))
+    # normal = tf.transformations.quaternion_matrix(
+    #             orientation).dot(np.array([0, 1, 0, 0]))[0:3]
+    normal = np.linalg.norm(sub.pose.position - position)
+    where_to_go_before_style = sub.pose.position + gate_dst * 0.5 * normal
+    where_to_go_after_style = sub.pose.position + gate_dst * normal
 
-        # Computer points before and after the gate for the sub to go to
-        point_before = position + FACTOR_DISTANCE_BEFORE * normal
-        point_after = position - FACTOR_DISTANCE_AFTER * normal
-
-        # go in front of gate
-        fprint('Moving infront of gate {}'.format(point_before))
-        yield sub.move.set_position(point_before).look_at(point_after).zero_roll_and_pitch().go(speed=SPEED)
-        distance = np.linalg.norm(sub.pose.position - position)
-
-        resp = yield sub.vision_proxies.start_gate.get_pose()
-
-        position = rosmsg_to_numpy(resp.pose.pose.position)
-        orientation = rosmsg_to_numpy(resp.pose.pose.orientation)
+    yield sub.move.set_position(where_to_go_before_style).look_at(where_to_go_after_style).zero_roll_and_pitch().go(speed=SPEED)
 
     fprint('YOLO! With style')
     yield style_points(sub)
 
-        # go through the gate
-    fprint('YOLO! Going through gate {}'.format(point_after))
-    yield sub.move.set_position(point_after).zero_roll_and_pitch().go(speed=SPEED)
+    fprint('YOLO! Going through gate')
+    yield sub.move.set_position(where_to_go_after_style).zero_roll_and_pitch().go(speed=SPEED)
 
     yield sub.vision_proxies.start_gate.stop()
 
     defer.returnValue(True)
 
+
 @txros.util.cancellableInlineCallbacks
 def style_points(sub):
-    yield sub.move.yaw_right(np.pi/2).go()
-    yield sub.move.yaw_right(np.pi/2).go()
-    yield sub.move.yaw_right(np.pi/2).go()
-    yield sub.move.yaw_right(np.pi/2).go()
-    yield sub.move.pitch_down(np.pi/2).go()
-    yield sub.move.pitch_up(np.pi).go()
+    yield sub.move.yaw_right(np.pi / 2).go()
+    yield sub.move.yaw_right(np.pi / 2).go()
+    yield sub.move.yaw_right(np.pi / 2).go()
+    yield sub.move.yaw_right(np.pi / 2).go()
     yield sub.move.zero_roll_and_pitch().go()

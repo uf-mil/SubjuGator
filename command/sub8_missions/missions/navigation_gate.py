@@ -17,7 +17,7 @@ fprint = text_effects.FprintFactory(
 
 # Distance before and after the gate in meters
 FACTOR_DISTANCE_BEFORE = 1.5
-FACTOR_DISTANCE_AFTER = 7.5
+FACTOR_DISTANCE_AFTER = 8
 
 SPEED = 0.3
 
@@ -76,6 +76,7 @@ def run(sub):
 
     defer.returnValue(True)
 
+
 @txros.util.cancellableInlineCallbacks
 def search_moves(sub):
     move_spacing_left, move_step_left = np.linspace(
@@ -95,10 +96,8 @@ def search_moves(sub):
 
 @txros.util.cancellableInlineCallbacks
 def style_points(sub):
-    yield sub.move.yaw_right(np.pi/2).go()
-    yield sub.move.yaw_right(np.pi/2).go()
-    yield sub.move.yaw_right(np.pi/2).go()
-    yield sub.move.yaw_right(np.pi/2).go()
-    yield sub.move.pitch_down(np.pi/2).go()
-    yield sub.move.pitch_up(np.pi).go()
+    yield sub.move.yaw_right(np.pi / 2).go()
+    yield sub.move.yaw_right(np.pi / 2).go()
+    yield sub.move.yaw_right(np.pi / 2).go()
+    yield sub.move.yaw_right(np.pi / 2).go()
     yield sub.move.zero_roll_and_pitch().go()
