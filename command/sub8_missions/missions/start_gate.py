@@ -73,6 +73,9 @@ def run(sub):
         position = rosmsg_to_numpy(resp.pose.pose.position)
         orientation = rosmsg_to_numpy(resp.pose.pose.orientation)
 
+    fprint('YOLO! With style')
+    yield style_points(sub)
+
         # go through the gate
     fprint('YOLO! Going through gate {}'.format(point_after))
     yield sub.move.set_position(point_after).zero_roll_and_pitch().go(speed=SPEED)
@@ -80,3 +83,13 @@ def run(sub):
     yield sub.vision_proxies.start_gate.stop()
 
     defer.returnValue(True)
+
+@txros.util.cancellableInlineCallbacks
+def style_points(sub):
+    yield sub.move.yaw_right(np.pi/2).go()
+    yield sub.move.yaw_right(np.pi/2).go()
+    yield sub.move.yaw_right(np.pi/2).go()
+    yield sub.move.yaw_right(np.pi/2).go()
+    yield sub.move.pitch_down(np.pi/2).go()
+    yield sub.move.pitch_up(np.pi).go()
+    yield sub.move.zero_roll_and_pitch().go()
