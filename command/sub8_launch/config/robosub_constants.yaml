@@ -1,0 +1,77 @@
+# This file contains some constants from the RoboSub2017 rules.
+# It is intended to keep all of thest constants in one file, used by many programs in the repo.
+# Units:
+  # Length: meters
+  # Mass: kg
+  # Angle: radians
+transdec:  # Venue for RoboSub, the SSC Pacific TRANSDEC, divided into four sections for practice/semi-finals and two for finals
+    depth: 4.8768  # Typical depth of transdec pool in competition areas
+
+# Contants for competition element demensions and placement, in the order they apprear during run
+gate: # Upside down "U" shaped gate w/ orange tape on two verticle legs to pass through at any depth to begin run
+    orange_length: 1.2192
+    leg_height: 1.524
+    leg_distance_inner: 3.05
+    leg_diameter: 0.1524
+path_marker: # Orangle rectangle on ground pointing from gate -> buoy and buoy -> navigation_channel
+    length: 1.2192
+    width: 0.1524
+buoy:
+    diameter: 0.2286
+    yellow_bump_angle: 0.17453293 # Angle yellow buoy must be displaced by to get points
+    height_min: 1.8288  # Lowest height above bottom buoy may be placed at
+    height_max: 2.7432  # Highest height above bottom buoy may be placed at
+    buoy_distance: 1.2192 # Distance (Y axis) between each buoy from front view
+    buoy_distance_x: 0.9144 # Distance (X axis) that all buoys are within from top view
+navigate_channel:  # Yellow "U" shaped pipe to go through, with extra style points for rotation while going through
+    pipe_diamter: 0.0508
+    horizontal_pipe_length: 2.4384  # Length of horizontal pipe
+    verticle_pipe_length: 1.2192  # Length of 2 verticle pipes completing "U" shape
+    height:  # Range of height above ground navigation channel will be placed
+        min: 1.2192
+        max: 1.8288
+bins: # Two boxes with quotes, one covered with a handle, to drop markers in
+    handle: # Purple PVC handle attached to orange lid on one bin
+        height: 0.2032 # Length of verticle 2 bars of handle
+        length: 0.4064 # Length of horizontal bar completing handle
+    border:  # White border surrounding lid / inside of bin
+        width: 0.1524  # Length of border on each side of bin
+    inside: # Black inside of bin containing one of two quotes, where marker must be dropped
+        length: 0.6096
+        width: 0.3048
+torpedo:
+    board:
+        width: 0.6096 # Width of torpedo board
+    height:
+        min: 1.2192  # min height torpedo board may be placed at
+        max: 1.8288  # max height torpedo board may be placed at
+    targets:
+        border_width: 0.0508  # width of yellow border around both size targets
+        small_inner_diameter: 0.2032  # inner diameter of smaller targets
+        large_inner_diameter: 0.3048  # inner diameter of larger targets
+manipulation:
+    octagon:
+        diameter: 2.7432  # Inner distance between any two diagonal sides of octagon
+        ball_diameter: 0.2032  # Diameter of emjoi beach balls at center of 3 sides of octagon
+        ball_fondler_length: 0.254  # Length of 4 sides of pvc pipe holding ball
+    table:
+        height: 0.3048  # Height above ground table will be placed at
+        small_elipse:
+            small_axis_diameter: 0.1524 # Length of small diamter of ellipse
+            large_axis_diameter: 0.3048 # Length of small diameter of ellipse
+        large_elipse:
+            small_axis_diameter: 0.2032 # Length of small diamter of ellipse
+            large_axis_diameter: 0.4064 # Length of small diameter of ellipse
+    tower:
+        height:  # Height of pipes when on tower
+            min: 1.2192
+            max: 1.524
+        length: 0.3048  # Length of each of 4 sides of tower
+    pinger_height: 0.6096
+    pipe:
+        small_length: 0.2032
+        large_length: 0.3048
+
+
+
+

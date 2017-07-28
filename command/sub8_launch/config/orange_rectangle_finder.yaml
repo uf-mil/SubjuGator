@@ -6,11 +6,6 @@ debug_ros: True
 canny_low: 100
 canny_ratio: 3.0
 
-# Threshold hue and saturation values to create mask to find orange objects.
-#   runs: cv2.inRange(img, (0, thresh_saturation_low, 0), (thresh_hue_high, 255, 255))
-thresh_hue_high: 60
-thresh_satuation_low: 100
-
 # Minimum number of pixels in area of a contour to not be filtered
 min_contour_area: 100
 
@@ -19,7 +14,7 @@ epsilon_range: [0.01, 0.1]
 epsilon_step: 0.01
 
 # Maximum value from cv2.matchshapes to be considered a valid contour
-shape_match_thresh: 0.4
+shape_match_thresh: 0.666
 
 # <min_found_count> number of images where object is found within <timeout_seconds> to be considered found
 min_found_count: 10
