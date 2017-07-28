@@ -9,8 +9,9 @@ from mil_misc_tools import text_effects
 from mil_vision_tools import RectFinder
 
 SEARCH_DEPTH = .65
-SEARCH_RADIUS_METERS = 1.0
-TIMEOUT_SECONDS = 60
+SEARCH_RADIUS_METERS = 0.75
+TIMEOUT_SECONDS = 30
+PAUSE_SECONDS = 0.25
 DO_PATTERN = True
 FACE_FORWARD = True
 SPEED = 0.5
@@ -45,10 +46,10 @@ def run(sub):
 
     pattern = []
     if DO_PATTERN:
-        start = sub.move.zero_roll_and_pitch()
+        start = sub.move.zero_roll_and_pitch().depth(SEARCH_DEPTH)
+        yield start.go(speed=SPEED)
         r = SEARCH_RADIUS_METERS
-        pattern = [start.zero_roll_and_pitch(),
-                   start.right(r),
+        pattern = [start.right(r),
                    start.forward(r),
                    start.left(r),
                    start.backward(r),
@@ -59,7 +60,7 @@ def run(sub):
     s = Searcher(sub, sub.vision_proxies.orange_rectangle.get_pose, pattern)
     resp = None
     print_info("RUNNING SEARCH PATTERN")
-    resp = yield s.start_search(loop=False, timeout=TIMEOUT_SECONDS, spotings_req=1)
+    resp = yield s.start_search(loop=False, timeout=TIMEOUT_SECONDS, spotings_req=1, speed=SPEED, pause=PAUSE_SECONDS)
 
     if resp is None or not resp.found:
         print_bad("MARKER NOT FOUND")
