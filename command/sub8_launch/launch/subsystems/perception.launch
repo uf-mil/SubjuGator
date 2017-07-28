@@ -1,6 +1,8 @@
 <launch>
+  <!-- Allows launching of individual perception nodes for testing -->
+  <!-- ex to launch buoy perception only: roslaunch sub8_launch perception.launch buoy:=True orange_rectangle:=False torpedo_target:=False -->
   <arg name="orange_rectangle" default="True" />
-  <arg name="buoy" default="False" />
+  <arg name="buoy" default="True" />
 
   <!-- roslaunch sub8_launch perception.launch color_calibration:=gazebo_color_calibration.yaml -->
   <arg name="color_calibration" default="default_color_calibration.yaml" />
