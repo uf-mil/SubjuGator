@@ -8,3 +8,5 @@ start_gate:
     root: "/vision/start_gate"
 colored_rectangle:
     root: "/vision/colored_rectangle"
+orange_rectangle:
+    root: "/vision/orange_rectangle"

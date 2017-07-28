@@ -16,23 +16,21 @@ FACE_FORWARD = True
 SPEED = 0.5
 MISSION = "Find Bins"
 
-# Model of four corners of path marker, centered around 0 in meters
-LENGTH = 0.9  # Longer side of path marker in meters
+# Model of four corners of bins, centered around 0 in meters
+LENGTH = 0.9  # Longer side of bins in meters
 WIDTH = 0.6  # Shorter Side
 
-# Demensions of the prop we made for testing
-# LENGTH = LENGTH*0.75
-# WIDTH = WIDTH*0.75
 
 forward_vec = np.array([1, 0, 0, 0])
-
 
 
 @util.cancellableInlineCallbacks
 def run(sub):
     print_info = text_effects.FprintFactory(title=MISSION).fprint
-    print_bad = text_effects.FprintFactory(title=MISSION, msg_color="red").fprint
-    print_good = text_effects.FprintFactory(title=MISSION, msg_color="green").fprint
+    print_bad = text_effects.FprintFactory(
+        title=MISSION, msg_color="red").fprint
+    print_good = text_effects.FprintFactory(
+        title=MISSION, msg_color="green").fprint
     print_info("STARTING")
 
     # Set geometry of marker model
@@ -49,9 +47,9 @@ def run(sub):
         start = sub.move.zero_roll_and_pitch()
         r = SEARCH_RADIUS_METERS
 
-    # Search Pattern  
+    # Search Pattern
     #      _ _ _ _ _ _ _
-    # |    |            |    
+    # |    |            |
     # |    |            |
     # |    |    _ _     |
     # |    |   |   |    |
@@ -62,15 +60,15 @@ def run(sub):
     # |_ _ _ _ _ _ _ _ _|
 
         pattern = [start.zero_roll_and_pitch(),
-                   start.forward(0.5*r),
-                   start.right(0.5*r),
+                   start.forward(0.5 * r),
+                   start.right(0.5 * r),
                    start.backward(r),
                    start.left(r),
-                   start.forward(1.5*r),
-                   start.right(1.5*r),
-                   start.backward(2*r),
-                   start.left(2*r),
-                   start.forward(2*r)
+                   start.forward(1.5 * r),
+                   start.right(1.5 * r),
+                   start.backward(2 * r),
+                   start.left(2 * r),
+                   start.forward(2 * r)
                    ]
 
     s = Searcher(sub, sub.vision_proxies.colored_rectangle.get_pose, pattern)
@@ -87,19 +85,18 @@ def run(sub):
 
     move = sub.move
     position = rosmsg_to_numpy(resp.pose.pose.position)
-    # position[2] = move._pose.position[2]  # Leave Z alone!
-    position[2] = position[2] + 1.0
-    # position[2] = move._pose.position[2] - 0.5  # Leave Z alone!
+    position[2] = position[2] + 1.5
     orientation = rosmsg_to_numpy(resp.pose.pose.orientation)
 
-    # print_info("suggested postion: {}".format(position))
-    # print_info("suggested orientation: {}".format(orientation))
+    move = move.set_position(position).set_orientation(
+        orientation).zero_roll_and_pitch()
 
-    move = move.set_position(position).set_orientation(orientation).zero_roll_and_pitch()
-
-    # Ensure SubjuGator continues to face same general direction as before (doesn't go in opposite direction)
-    odom_forward = tf.transformations.quaternion_matrix(sub.move._pose.orientation).dot(forward_vec)
-    marker_forward = tf.transformations.quaternion_matrix(orientation).dot(forward_vec)
+    # Ensure SubjuGator continues to face same general direction as before
+    # (doesn't go in opposite direction)
+    odom_forward = tf.transformations.quaternion_matrix(
+        sub.move._pose.orientation).dot(forward_vec)
+    marker_forward = tf.transformations.quaternion_matrix(
+        orientation).dot(forward_vec)
     if FACE_FORWARD and np.sign(odom_forward[0]) != np.sign(marker_forward[0]):
         move = move.yaw_right(np.pi)
 
@@ -107,8 +104,8 @@ def run(sub):
     yield move.go(speed=SPEED)
 
     # move ball dropper above center of bin
-    
-    # drop balls    
+
+    # drop balls
     print_info("DROPPING BALLS!")
     yield self.sub.drop_marker()
     yield self.sub.drop_marker()
@@ -119,7 +116,6 @@ def run(sub):
     # raise up one meter
     # drop handle
 
-    print_good("ALIGNED TO BIN. MOVE FORWARD TO NEXT CHALLENGE!")
+    print_good("DROPPED BALLS! MOVE FORWARD TO NEXT CHALLENGE!")
     yield sub.vision_proxies.colored_rectangle.stop()
     defer.returnValue(True)
-    

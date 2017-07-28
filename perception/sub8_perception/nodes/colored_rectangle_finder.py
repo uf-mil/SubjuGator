@@ -11,7 +11,6 @@ from mil_ros_tools import numpy_to_point, Image_Publisher, Image_Subscriber, num
 from image_geometry import PinholeCameraModel
 from visualization_msgs.msg import Marker
 from mil_msgs.srv import SetGeometry
-from mil_msgs.msg import RangeStamped
 from mil_vision_tools import RectFinder, ImageMux
 
 
@@ -57,7 +56,8 @@ class ColoredRectangleFinder():
         self.debug_gui = True
         self.enabled = True
         self.cam = None
-        self.internal_active = False # Decides whether to search internal contours or ignore.
+        # Decides whether to search internal contours or ignore.
+        self.internal_active = False
 
         self.bin_count = 0
         self.required_bin_count = 2
@@ -74,17 +74,17 @@ class ColoredRectangleFinder():
         self.white = (255, 255, 255)
         self.black = (0, 0, 0)
 
-
         # Constants from launch config file
         self.find_internal = rospy.get_param("~find_internal", True)
         self.debug_ros = rospy.get_param("~debug_ros", True)
-        self.color_space = rospy.get_param("~color_space", "LAB") # LAB, BGR, HSV
-        self.thresh_low = rospy.get_param("~thresh_low", [175, 80,100])
+        self.color_space = rospy.get_param(
+            "~color_space", "LAB")  # LAB, BGR, HSV
+        self.thresh_low = rospy.get_param("~thresh_low", [175, 80, 100])
         self.thresh_high = rospy.get_param("~thresh_high", [255, 150, 150])
         self.thresh_low = np.array(self.thresh_low)
         self.thresh_high = np.array(self.thresh_high)
         self.min_contour_area = rospy.get_param("~min_contour_area", 5000)
-        
+
         self.epsilon_range = rospy.get_param("~epsilon_range", [0.02, 0.1])
         self.epsilon_step = rospy.get_param("~epsilon_step", 0.02)
         self.shape_match_thresh = rospy.get_param("~shape_match_thresh", 0.9)
@@ -96,28 +96,38 @@ class ColoredRectangleFinder():
         width = rospy.get_param("~width", 0.6)
         self.rect_model = RectFinder(length, width)
         self.do_3D = rospy.get_param("~do_3D", True)
-        camera = rospy.get_param("~image_topic", "/camera/down/left/image_rect_color")
+        camera = rospy.get_param(
+            "~image_topic",
+            "/camera/down/left/image_rect_color")
 
         self.tf_listener = tf.TransformListener()
-        self.tf_base_to_dropper = tf.TransformListener()
 
-        # Create kalman filter to track 3d position and direction vector for marker in /map frame
+        # Create kalman filter to track 3d position and direction vector for
+        # marker in /map frame
         self.state_size = 5  # X, Y, Z, DY, DX
         self.filter = cv2.KalmanFilter(self.state_size, self.state_size)
-        self.filter.transitionMatrix = 1. * np.eye(self.state_size, dtype=np.float32)
-        self.filter.measurementMatrix = 1. * np.eye(self.state_size, dtype=np.float32)
-        self.filter.processNoiseCov = 1e-6 * np.eye(self.state_size, dtype=np.float32)
-        self.filter.measurementNoiseCov = 1e-4 * np.eye(self.state_size, dtype=np.float32)
-        self.filter.errorCovPost = 1. * np.eye(self.state_size, dtype=np.float32)
+        self.filter.transitionMatrix = 1. * \
+            np.eye(self.state_size, dtype=np.float32)
+        self.filter.measurementMatrix = 1. * \
+            np.eye(self.state_size, dtype=np.float32)
+        self.filter.processNoiseCov = 1e-6 * \
+            np.eye(self.state_size, dtype=np.float32)
+        self.filter.measurementNoiseCov = 1e-4 * \
+            np.eye(self.state_size, dtype=np.float32)
+        self.filter.errorCovPost = 1. * \
+            np.eye(self.state_size, dtype=np.float32)
 
         self.reset()
-        self.service_set_geometry = rospy.Service('~set_geometry', SetGeometry, self._set_geometry_cb)
+        self.service_set_geometry = rospy.Service(
+            '~set_geometry', SetGeometry, self._set_geometry_cb)
         if self.debug_ros:
             self.debug_pub = Image_Publisher("~debug_image")
             self.markerPub = rospy.Publisher('~marker', Marker, queue_size=10)
-        self.service2D = rospy.Service('~2D', VisionRequest2D, self._vision_cb_2D)
+        self.service2D = rospy.Service(
+            '~2D', VisionRequest2D, self._vision_cb_2D)
         if self.do_3D:
-            self.service3D = rospy.Service('~pose', VisionRequest, self._vision_cb_3D)
+            self.service3D = rospy.Service(
+                '~pose', VisionRequest, self._vision_cb_3D)
         self.toggle = rospy.Service('~enable', SetBool, self._enable_cb)
 
         self.image_sub = Image_Subscriber(camera)
@@ -130,14 +140,18 @@ class ColoredRectangleFinder():
         last_img = None
         while not rospy.is_shutdown():
             now_img = self.image_sub.last_image
-            if now_img is last_img: continue
+            if now_img is last_img:
+                continue
             self._img_cb(now_img)
             last_img = now_img
 
     def _set_geometry_cb(self, req):
         self.rect_model = RectFinder.from_polygon(req.model)
         self.reset()
-        rospy.loginfo("Resetting rectangle model to LENGTH=%f, WIDTH=%f", self.rect_model.length, self.rect_model.width)
+        rospy.loginfo(
+            "Resetting rectangle model to LENGTH=%f, WIDTH=%f",
+            self.rect_model.length,
+            self.rect_model.width)
         return {'success': True}
 
     def _send_debug_marker(self):
@@ -180,7 +194,8 @@ class ColoredRectangleFinder():
         if self.last_found_time_3D is None or self.image_sub.last_image_time is None:
             res.found = False
             return res
-        dt = (self.image_sub.last_image_time - self.last_found_time_3D).to_sec()
+        dt = (self.image_sub.last_image_time -
+              self.last_found_time_3D).to_sec()
         if dt < 0 or dt > self.timeout_seconds:
             res.found = False
         elif (self.last3d is None or not self.enabled):
@@ -229,26 +244,30 @@ class ColoredRectangleFinder():
         self.found_count = 0
         self.found = False
         self.last3d = None
-        self.filter.errorCovPre = 1. * np.eye(self.state_size, dtype=np.float32)
+        self.filter.errorCovPre = 1. * \
+            np.eye(self.state_size, dtype=np.float32)
         if state is not None:
             self.found_count = 1
             state = np.array(state, dtype=np.float32)
             self.filter.statePost = state
 
-    def _update_kf(self, (x, y, z, dy, dx)):
+    def _update_kf(self, xxx_todo_changeme):
         '''
         Updates the kalman filter using the pose estimation
         from the most recent frame. Also tracks time since last seen and how
         often is has been seen to set the boolean "found" for the vision request
         '''
+        (x, y, z, dy, dx) = xxx_todo_changeme
         if self.last_found_time_3D is None:  # First time found, set initial KF pose to this frame
             self._clear_filter((x, y, z, dy, dx))
             self.last_found_time_3D = self.image_sub.last_image_time
             return
-        dt = (self.image_sub.last_image_time - self.last_found_time_3D).to_sec()
+        dt = (self.image_sub.last_image_time -
+              self.last_found_time_3D).to_sec()
         self.last_found_time_3D = self.image_sub.last_image_time
         if dt < 0 or dt > self.timeout_seconds:
-            rospy.logwarn("Timed out since last saw marker, resetting. DT={}".format(dt))
+            rospy.logwarn(
+                "Timed out since last saw marker, resetting. DT={}".format(dt))
             self._clear_filter((x, y, z, dy, dx))
             return
 
@@ -264,7 +283,11 @@ class ColoredRectangleFinder():
                 rospy.loginfo("Marker Found")
             self.found = True
 
-    def shift(self, point, starting_frame='base_link', ending_frame='ball_dropper'):
+    def shift(
+            self,
+            point,
+            starting_frame='base_link',
+            ending_frame='ball_dropper'):
         '''
         Return the transformation of a point between frames
         Useful for sub moves when it is desired to position a particular frame somewhere instead of
@@ -273,8 +296,9 @@ class ColoredRectangleFinder():
         tf_base_to_dropper = tf.TransformListener()
 
         # find tf between baselink and ball dropper
-        translation, quaternion = self.tf_base_to_dropper.lookupTransform(starting_frame, ending_frame, rospy.get_rostime())
-        
+        translation, quaternion = tf_base_to_dropper.lookupTransform(
+            starting_frame, ending_frame, rospy.get_rostime())
+
         # add that difference to the position in base link
         point.point.x = point.point.x - translation[0]
         point.point.y = point.point.y - translation[1]
@@ -283,14 +307,16 @@ class ColoredRectangleFinder():
         return point
 
     def _get_pose_3D(self, corners):
-        tvec, rvec = self.rect_model.get_pose_3D(corners, cam=self.cam, rectified=True)
+        tvec, rvec = self.rect_model.get_pose_3D(
+            corners, cam=self.cam, rectified=True)
         if tvec[2][0] < 0.3:  # Sanity check on position estimate
             rospy.logwarn("Marker too close, must be wrong...")
             return False
         rmat, _ = cv2.Rodrigues(rvec)
         vec = rmat[:, 0]
 
-        # Convert position estimate and 2d direction vector to messages to they can be transformed
+        # Convert position estimate and 2d direction vector to messages to they
+        # can be transformed
         ps = PointStamped()
         ps.header.frame_id = self.cam.tfFrame()
         ps.header.stamp = self.image_sub.last_image_time
@@ -306,35 +332,52 @@ class ColoredRectangleFinder():
         # Transform pose estimate to map frame
         try:
             tf.TransformListener()
-            self.tf_listener.waitForTransform('/map', ps.header.frame_id, ps.header.stamp, rospy.Duration(0.1))
+            self.tf_listener.waitForTransform(
+                '/map', ps.header.frame_id, ps.header.stamp, rospy.Duration(0.1))
             map_ps = self.tf_listener.transformPoint('/map', ps)
 
             try:
                 map_ps = self.shift(map_ps)
             except tf.Exception as err:
-                rospy.logwarn("Couldn't Transform /base_link to ball_dropper: {}".format(err))
+                rospy.logwarn(
+                    "Couldn't Transform /base_link to ball_dropper: {}".format(err))
 
             map_vec3 = self.tf_listener.transformVector3('/map', vec3)
 
-
         except tf.Exception as err:
-            rospy.logwarn("Could not transform {} to /map error={}".format(self.cam.tfFrame(), err))
+            rospy.logwarn(
+                "Could not transform {} to /map error={}".format(self.cam.tfFrame(), err))
             return False
-        # Try to ensure vector always points the same way, so kf is not thrown off at some angles
+        # Try to ensure vector always points the same way, so kf is not thrown
+        # off at some angles
         if map_vec3.vector.y < 0.0:
             map_vec3.vector.y = -map_vec3.vector.y
             map_vec3.vector.x = -map_vec3.vector.x
-        measurement = (map_ps.point.x, map_ps.point.y, map_ps.point.z, map_vec3.vector.y, map_vec3.vector.x)
+        measurement = (
+            map_ps.point.x,
+            map_ps.point.y,
+            map_ps.point.z,
+            map_vec3.vector.y,
+            map_vec3.vector.x)
 
         # Update filter and found state with the pose estimate from this frame
         self._update_kf(measurement)
 
         if self.debug_ros:
             # Draw coordinate axis onto object using pose estimate to project
-            refs, _ = cv2.projectPoints(self.REFERENCE_POINTS, rvec, tvec, self.cam.intrinsicMatrix(), np.zeros((5, 1)))
+            refs, _ = cv2.projectPoints(
+                self.REFERENCE_POINTS, rvec, tvec, self.cam.intrinsicMatrix(), np.zeros(
+                    (5, 1)))
             refs = np.array(refs, dtype=np.int)
-            cv2.line(self.last_image, (refs[0][0][0], refs[0][0][1]),
-                     (refs[1][0][0], refs[1][0][1]), (0, 0, 255))  # X axis refs
+            cv2.line(
+                self.last_image,
+                (refs[0][0][0],
+                 refs[0][0][1]),
+                (refs[1][0][0],
+                 refs[1][0][1]),
+                (0,
+                 0,
+                 255))  # X axis refs
             cv2.line(self.last_image, (refs[0][0][0], refs[0][0][1]),
                      (refs[2][0][0], refs[2][0][1]), (0, 255, 0))  # Y axis ref
             cv2.line(self.last_image, (refs[0][0][0], refs[0][0][1]),
@@ -355,9 +398,11 @@ class ColoredRectangleFinder():
         if mismatch > self.shape_match_thresh:
             return False, self.blue
         # Checks that contour is 4 sided
-        corners = self.rect_model.get_corners(contour, debug_image=self.last_image,
-                                              epsilon_range=self.epsilon_range,
-                                              epsilon_step=self.epsilon_step)
+        corners = self.rect_model.get_corners(
+            contour,
+            debug_image=self.last_image,
+            epsilon_range=self.epsilon_range,
+            epsilon_step=self.epsilon_step)
         if corners is None:
             return False, self.magenta
         self.last2d = self.rect_model.get_pose_2D(corners)
@@ -384,9 +429,10 @@ class ColoredRectangleFinder():
             colored = cv2.cvtColor(blur, cv2.COLOR_BGR2LAB)
 
         kernel = np.ones((3, 3), np.uint8)
-        erosion = cv2.erode(colored, kernel, iterations = 6)
+        erosion = cv2.erode(colored, kernel, iterations=6)
 
-        self.thresh_no_erosion = cv2.inRange(colored, self.thresh_low, self.thresh_high)
+        self.thresh_no_erosion = cv2.inRange(
+            colored, self.thresh_low, self.thresh_high)
         thresh = cv2.inRange(erosion, self.thresh_low, self.thresh_high)
 
         return thresh
@@ -394,18 +440,18 @@ class ColoredRectangleFinder():
     def minimum_norm(self, center, features, means, channel=0):
         '''
         Among the provided features find the proximity to a predefined center
-        
+
         Center of feature may be geometric (ie. the 2D coordinates of the center of a contour),
         or it may be proximity of a color to another
 
         @param center   : base value to compare set of means against
         @param features : the set of features who
-        @param means    : the corresponding set means of given set of features 
+        @param means    : the corresponding set means of given set of features
         @param channel  : channel to check along feature
         '''
         distances = []
         for mean in means:
-            distances.append(np.linalg.norm(center[channel:]-mean[channel:]))
+            distances.append(np.linalg.norm(center[channel:] - mean[channel:]))
         min_idx = distances.index(min(distances))
         return features[min_idx]
 
@@ -418,12 +464,14 @@ class ColoredRectangleFinder():
 
     def image_mux_today(self, images):
         ''' Plotting tool for debugging'''
-        import os
         labels = ['Original', 'Threshed', 'Full Mask', None]
         # size = (960, 1280)
         size = (480, 640)
-        t = ImageMux(size=size, border_color=(0, 0, 255), border_thickness=1, shape=(2, 2),
-                 labels=labels, text_scale=1, text_color=(255, 255, 0))
+        t = ImageMux(
+            size=size, border_color=(
+                0, 0, 255), border_thickness=1, shape=(
+                2, 2), labels=labels, text_scale=1, text_color=(
+                255, 255, 0))
         for i in xrange(len(images)):
             t[i] = np.array(images[i])
         cv2.imshow('Kapu', t.image)
@@ -439,8 +487,6 @@ class ColoredRectangleFinder():
 
         return areas, contour_centers
 
-
-
     def _img_cb(self, img):
         potential_contours = []
         self.potential_masks = []
@@ -448,14 +494,17 @@ class ColoredRectangleFinder():
             return
         self.last_image = img
         edges = self._get_edges()
-        _, contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        _, contours, _ = cv2.findContours(
+            edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         # Check if each contour is valid
         for idx, c in enumerate(contours):
             valid, color = self._is_valid_contour(c)
             if valid:
                 potential_contours.append(c)
-                self.potential_masks.append(self._get_mask_from_contour(contours, idx))
+                self.potential_masks.append(
+                    self._get_mask_from_contour(
+                        contours, idx))
                 if self.debug_ros:
                     cv2.drawContours(self.last_image, contours, idx, color, 3)
             else:
@@ -469,27 +518,34 @@ class ColoredRectangleFinder():
             try:
                 channel = 2
                 self.bgr = img.copy()
-                areas, contour_centers = self.find_contour_parameters(potential_contours)
+                areas, contour_centers = self.find_contour_parameters(
+                    potential_contours)
                 self.max_internal_area = min(areas) - 10
-                closest_color = np.array([0,0,180]) # BGR         
-                _, internal_contours, hierarchy = cv2.findContours(self.thresh_no_erosion, cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
-                masks, mean_color, full_mask = self._get_internal_masks_and_color(internal_contours, hierarchy[0])
+                closest_color = np.array([0, 0, 180])  # BGR
+                _, internal_contours, hierarchy = cv2.findContours(
+                    self.thresh_no_erosion, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+                masks, mean_color, full_mask = self._get_internal_masks_and_color(
+                    internal_contours, hierarchy[0])
                 # check internal masks! for  stuff
-                best_mask = self.minimum_norm(closest_color, masks, mean_color, channel)
+                best_mask = self.minimum_norm(
+                    closest_color, masks, mean_color, channel)
                 best_center_mask = self.center_contour(best_mask)
-                contour_with_lid = self.minimum_norm(best_center_mask, potential_contours, contour_centers)
-                
+                contour_with_lid = self.minimum_norm(
+                    best_center_mask, potential_contours, contour_centers)
+
                 self.internal_active = True
                 self._is_valid_contour(contour_with_lid)
                 self.internal_active = False
 
                 # best internal mask
                 x, y, w, h = cv2.boundingRect(best_mask)
-                cv2.rectangle(self.last_image,(x,y),(x+w,y+h),self.black,2)
+                cv2.rectangle(self.last_image, (x, y),
+                              (x + w, y + h), self.black, 2)
 
                 # best external mask
                 x1, y1, w1, h1 = cv2.boundingRect(contour_with_lid)
-                cv2.rectangle(self.last_image,(x1,y1),(x1+w1,y1+h1), self.green, 2)
+                cv2.rectangle(self.last_image, (x1, y1),
+                              (x1 + w1, y1 + h1), self.green, 2)
                 images = [self.last_image, edges, full_mask]
 
             except ValueError as e:
@@ -527,23 +583,25 @@ class ColoredRectangleFinder():
         and return their corresponding saturation values.
         '''
 
-        possible_lids = []
         masks = []
         full_mask = np.zeros(self.last_image.shape[:2], np.uint8)
         mean_color = []
         for idx, component in enumerate(zip(contours, hierarchy)):
             currentContour = component[0]
-            currentHierarchy = component[1]
-            x,y,w,h = cv2.boundingRect(currentContour)
+            x, y, w, h = cv2.boundingRect(currentContour)
             currentMask = self._get_mask_from_contour(contours, idx)
-            status = self._confirm_mask_within_larger_masks(currentMask, self.potential_masks)
-            area = bool(50 <= cv2.contourArea(currentContour) < self.max_internal_area)
+            status = self._confirm_mask_within_larger_masks(
+                currentMask, self.potential_masks)
+            area = bool(50 <= cv2.contourArea(
+                currentContour) < self.max_internal_area)
             if area and status:
-                cv2.drawContours(self.last_image, contours, idx, self.yellow, 3)
+                cv2.drawContours(
+                    self.last_image, contours, idx, self.yellow, 3)
                 masks.append(currentMask)
                 mean_color.append(cv2.mean(self.bgr, mask=masks[-1])[:3])
                 full_mask = full_mask + masks[-1]
         return masks, mean_color, full_mask
+
 
 if __name__ == '__main__':
     rospy.init_node('colored_rectangle_finder')
