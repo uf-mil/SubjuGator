@@ -1,5 +1,6 @@
 #include <sub8_perception/start_gate.hpp>
-Sub8StartGateDetector::Sub8StartGateDetector() : nh("~"), timeout_for_found_(2), image_transport_(nh), tf_listener_(tf_buffer_)
+Sub8StartGateDetector::Sub8StartGateDetector()
+  : nh("~"), timeout_for_found_(2), image_transport_(nh), tf_listener_(tf_buffer_)
 {
   // Start the camera streamers
   left_cam_stream_ = std::unique_ptr<ROSCameraStream_Vec3>(new ROSCameraStream_Vec3(nh, 1));
@@ -62,7 +63,7 @@ std::vector<cv::Point> Sub8StartGateDetector::get_2d_feature_points(cv::Mat imag
   if (features.size() < 4)
     return {};
 
-return features;
+  return features;
   // return get_corner_center_points(features);
 }
 
@@ -170,7 +171,7 @@ std::vector<cv::Point> Sub8StartGateDetector::get_corner_center_points(const std
   return features_l;
 }
 
-std::vector<cv::Point>  Sub8StartGateDetector::process_image(cv::Mat &image)
+std::vector<cv::Point> Sub8StartGateDetector::process_image(cv::Mat &image)
 {
   cv::Mat kernal = cv::Mat::ones(5, 5, CV_8U);
 
@@ -207,11 +208,12 @@ std::vector<cv::Point>  Sub8StartGateDetector::process_image(cv::Mat &image)
   cv::HoughLinesP(dilation, lines_vertical, 1, CV_PI, 150, 100, 1);
 
   cv::Mat img_line_mask = cv::Mat::zeros(image.size(), CV_8U);
-  for(size_t i = 0; i < lines_vertical.size(); i++)
+  for (size_t i = 0; i < lines_vertical.size(); i++)
   {
     cv::Vec4i l = lines_vertical[i];
-    double angle = atan2(l[0]-l[2], l[1] - l[3]) * 180 / CV_PI;
-    if (abs(angle) > 20 && abs(angle) < 70) continue;
+    double angle = atan2(l[0] - l[2], l[1] - l[3]) * 180 / CV_PI;
+    if (abs(angle) > 20 && abs(angle) < 70)
+      continue;
     cv::line(img_line_mask, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]), cv::Scalar(255), 1, CV_AA);
   }
 
@@ -225,39 +227,33 @@ std::vector<cv::Point>  Sub8StartGateDetector::process_image(cv::Mat &image)
   cv::findContours(dilation_mask, contour, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE, cv::Point(-1, -1));
   std::vector<cv::Point> return_features;
   if (contour.size() > 1)
-  { 
-  int largestIndex = 0;
-  int secondLargestIndex = 1;
-
-  std::sort(contour.begin(), contour.end(), [](const std::vector<cv::Point> &a, const std::vector<cv::Point> &b) -> bool
   {
-    return cv::contourArea(a) < cv::contourArea(b);
-  });
+    int largestIndex = 0;
+    int secondLargestIndex = 1;
 
-  
-  cv::Point extBot0   = *std::max_element(contour.at(largestIndex).begin(), contour.at(largestIndex).end(),
-                        [](const cv::Point& lhs, const cv::Point& rhs) {
-                            return lhs.y < rhs.y;
-                    });
-  cv::Point extBot1   = *std::max_element(contour.at(secondLargestIndex).begin(), contour.at(secondLargestIndex).end(),
-                        [](const cv::Point& lhs, const cv::Point& rhs) {
-                            return lhs.y < rhs.y;
-                    });
-   if (abs(extBot0.y - extBot1.y) < 20)
-   {
-      drawContours(debug_image_bgr_, contour, largestIndex, cv::Scalar(0,0,255), 1, 8);
-      drawContours(debug_image_bgr_, contour, secondLargestIndex, cv::Scalar(0,255,0), 1, 8);
-      
+    std::sort(contour.begin(), contour.end(),
+              [](const std::vector<cv::Point> &a, const std::vector<cv::Point> &b) -> bool {
+                return cv::contourArea(a) < cv::contourArea(b);
+              });
+
+    cv::Point extBot0 = *std::max_element(contour.at(largestIndex).begin(), contour.at(largestIndex).end(),
+                                          [](const cv::Point &lhs, const cv::Point &rhs) { return lhs.y < rhs.y; });
+    cv::Point extBot1 = *std::max_element(contour.at(secondLargestIndex).begin(), contour.at(secondLargestIndex).end(),
+                                          [](const cv::Point &lhs, const cv::Point &rhs) { return lhs.y < rhs.y; });
+    if (abs(extBot0.y - extBot1.y) < 20)
+    {
+      drawContours(debug_image_bgr_, contour, largestIndex, cv::Scalar(0, 0, 255), 1, 8);
+      drawContours(debug_image_bgr_, contour, secondLargestIndex, cv::Scalar(0, 255, 0), 1, 8);
+
       return_features.push_back(extBot0);
       return_features.push_back(extBot1);
       return_features.push_back(cv::Point(extBot0.x, extBot0.y - 100));
       return_features.push_back(cv::Point(extBot1.x, extBot1.y - 100));
-      cv::circle(debug_image_bgr_, return_features[0], 8, cv::Scalar(0,255,0), -1);
-      cv::circle(debug_image_bgr_, return_features[1], 8, cv::Scalar(0,255,255), -1);
-      cv::circle(debug_image_bgr_, return_features[2], 8, cv::Scalar(0,255,0), -1);
-      cv::circle(debug_image_bgr_, return_features[3], 8, cv::Scalar(0,255,255), -1);
-   }
-
+      cv::circle(debug_image_bgr_, return_features[0], 8, cv::Scalar(0, 255, 0), -1);
+      cv::circle(debug_image_bgr_, return_features[1], 8, cv::Scalar(0, 255, 255), -1);
+      cv::circle(debug_image_bgr_, return_features[2], 8, cv::Scalar(0, 255, 0), -1);
+      cv::circle(debug_image_bgr_, return_features[3], 8, cv::Scalar(0, 255, 255), -1);
+    }
   }
   sensor_msgs::ImagePtr dbg_img_msg_canny = cv_bridge::CvImage(std_msgs::Header(), "mono8", dilation_mask).toImageMsg();
   debug_image_pub_canny_.publish(dbg_img_msg_canny);

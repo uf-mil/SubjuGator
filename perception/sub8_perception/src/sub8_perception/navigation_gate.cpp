@@ -1,6 +1,7 @@
 #include <sub8_perception/navigation_gate.hpp>
 
-Sub8NavigationGateDetector::Sub8NavigationGateDetector() : nh("~"), timeout_for_found_(2), image_transport_(nh), tf_listener_(tf_buffer_)
+Sub8NavigationGateDetector::Sub8NavigationGateDetector()
+  : nh("~"), timeout_for_found_(2), image_transport_(nh), tf_listener_(tf_buffer_)
 {
   // Start the camera streamers
   left_cam_stream_ = std::unique_ptr<ROSCameraStream_Vec3>(new ROSCameraStream_Vec3(nh, 1));

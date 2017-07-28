@@ -29,7 +29,7 @@ def run(sub):
     # Add search pattern if needed...
     fprint("Moving down a few meter")
     yield sub.move.depth(0.3).go()
-    search_pattern = [sub.move.forward(15)]
+    search_pattern = [sub.move.forward(10)]
     search = Searcher(
         sub,
         sub.vision_proxies.start_gate.get_pose,

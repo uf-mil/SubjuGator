@@ -37,7 +37,7 @@ def run(sub):
     resp = None
     fprint('Searching...')
 
-    slow_search = search_moves(sub)
+    slow_searcher = search_moves(sub)
     resp = yield search.start_search(loop=False, timeout=100, spotings_req=5, speed=0.3)
 
     if resp is None or not resp.found:
@@ -85,10 +85,13 @@ def run(sub):
 
     defer.returnValue(True)
 
+
 @txros.util.cancellableInlineCallbacks
 def search_moves(sub):
-    move_spacing_left, move_step_left = np.linspace(0, 0.261799, num = 5, retstep = True)
-    move_spacing_right, move_step_right = np.linspace(0, 0.261799 * 2, num = 10, retstep = True)
+    move_spacing_left, move_step_left = np.linspace(
+        0, 0.261799, num=5, retstep=True)
+    move_spacing_right, move_step_right = np.linspace(
+        0, 0.261799 * 2, num=10, retstep=True)
     for x in move_spacing_left:
         yield sub.move.yaw_left(move_step_left).zero_roll_and_pitch().go()
         yield sub.nh.sleep(0.05)
