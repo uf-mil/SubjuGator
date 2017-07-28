@@ -37,7 +37,7 @@ def run(sub):
 
     resp = None
     fprint('Searching...')
-    resp = yield search.start_search(loop=False, timeout=100, spotings_req=5, speed=0.5)
+    resp = yield search.start_search(loop=False, timeout=50, spotings_req=2, speed=0.3)
 
     if resp is None or not resp.found:
         fprint("No gate found...", msg_color="red")
