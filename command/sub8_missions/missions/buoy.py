@@ -29,14 +29,13 @@ class BumpBuoysMission(object):
     runs search patterns (left, right, up, down) to attempt to gain more observations on
     buoys between bumping moves.
     '''
-    START_FORWARD_METERS = 1.5  # Distance to move forward at start of mission so we're closer after aligning path marker
-    AFTER_FORWARD_METERS = 4.0  # Distance to move forward from search start position to start finding path marke:
+    START_FORWARD_METERS = 1.5  # Move forward towards buoys at start
+    AFTER_FORWARD_METERS = 4.0  # Move forward towards next path marker after mission
     ORDER = ['red', 'green', 'yellow']
     TIMEOUT_SECONDS = 30
     SEARCH_HEIGHT = 2.9  # Transdec
     SEARCH_STEPS = 10  # Number of moves to execute in search pattern
     SEARCH_PAUSE_SECONDS = 0.5
-    Z_PATTERN_RADIUS = 0.4
     Y_PATTERN_RADIUS = 2.0
     BUMP_DISTANCE = 0.3  # Distance past buoy position to go to bump
     BACKUP_METERS = 3.0
@@ -45,7 +44,8 @@ class BumpBuoysMission(object):
     SEARCH_SPEED = 0.5
 
     def __init__(self, sub):
-        self.search_origin = sub.move.to_height(self.SEARCH_HEIGHT).zero_roll_and_pitch().forward(self.START_FORWARD_METERS)
+        self.search_origin = sub.move.to_height(self.SEARCH_HEIGHT).zero_roll_and_pitch()\
+            .forward(self.START_FORWARD_METERS)
         self.sub = sub
         self.print_info = FprintFactory(title=MISSION).fprint
         self.print_bad = FprintFactory(title=MISSION, msg_color="red").fprint
@@ -55,13 +55,11 @@ class BumpBuoysMission(object):
         self.generate_pattern()
 
     def generate_pattern(self):
-        z = self.Z_PATTERN_RADIUS
-        y = self.Y_PATTERN_RADIUS
         self.moves = []
         # Execute SEARCH_STEPS moves to strafe right and left Y_PATTERN_RADIUS meters
-        for dy in np.linspace(0.0, -self.Y_PATTERN_RADIUS, num=self.SEARCH_STEPS/3):
+        for dy in np.linspace(0.0, -self.Y_PATTERN_RADIUS, num=self.SEARCH_STEPS / 3):
             self.moves.append([0, dy, 0])
-        for dy in np.linspace(-self.Y_PATTERN_RADIUS, self.Y_PATTERN_RADIUS, num=2*self.SEARCH_STEPS/3):
+        for dy in np.linspace(-self.Y_PATTERN_RADIUS, self.Y_PATTERN_RADIUS, num=2 * self.SEARCH_STEPS / 3):
             self.moves.append([0, dy, 0])
         self.move_index = 0
 
@@ -91,7 +89,6 @@ class BumpBuoysMission(object):
             yield move
             yield self.sub.nh.sleep(self.SEARCH_PAUSE_SECONDS)
             self.move_index = i + 1
-        self.print_bad('Pattern finished. Bumping any identifed buoys')
         self.pattern_done = True
 
     @util.cancellableInlineCallbacks
@@ -101,11 +98,13 @@ class BumpBuoysMission(object):
         yield self.sub.move.go(blind=self.BLIND)  # Station hold
         yield self.sub.move.depth(-buoy_position[2]).go(blind=self.BLIND, speed=self.BUMP_SPEED)
         dist = np.linalg.norm(self.sub.pose.position - buoy_position)
-        yield self.sub.move.look_at_without_pitching(buoy_position).forward(dist / 2.5).go(blind=self.BLIND, speed=self.BUMP_SPEED)
+        yield self.sub.move.look_at_without_pitching(buoy_position)\
+            .forward(dist / 2.5).go(blind=self.BLIND, speed=self.BUMP_SPEED)
         self.print_info('Updating goal now that were closer')
         buoy_position = self.buoys[buoy].position
         yield self.sub.move.depth(-buoy_position[2]).go(blind=self.BLIND, speed=self.BUMP_SPEED)
-        yield self.sub.move.look_at_without_pitching(buoy_position).set_position(buoy_position).forward(self.BUMP_DISTANCE).go(blind=self.BLIND, speed=self.BUMP_SPEED)
+        yield self.sub.move.look_at_without_pitching(buoy_position).set_position(buoy_position)\
+            .forward(self.BUMP_DISTANCE).go(blind=self.BLIND, speed=self.BUMP_SPEED)
         self.print_good("{} BUMPED. Returning to start position".format(buoy))
         yield self.search_origin.go()
 
@@ -119,8 +118,6 @@ class BumpBuoysMission(object):
             if self.buoys[color].bumped:
                 continue
             elif self.buoys[color].position is not None:
-                return color
-            elif self.pattern_done and self.buoys[color].position is not None:
                 return color
             else:
                 return None
@@ -142,11 +139,17 @@ class BumpBuoysMission(object):
             b = self.get_next_bump()
             if b is not None:
                 pattern.cancel()
+                yield self.sub.move.forward(0).go()  # Stop search
                 yield self.bump(b)
                 self.buoys[b].set_bumped()
                 if not self.done():
                     pattern = self.pattern()
             elif self.pattern_done:
+                self.print_bad('Pattern finished. Bumping any identifed buoys')
+                for color in self.ORDER:
+                    if not self.buoys[color].bumped and self.buoys[color].position is not None:
+                        yield self.bump(color)
+                        self.buoys[color].set_bumped()
                 break
             yield self.sub.nh.sleep(0.1)
         search.cancel()
@@ -154,7 +157,7 @@ class BumpBuoysMission(object):
         self.sub.vision_proxies.buoy.stop()
         self.print_good('Moving forward to see path marker...')
         yield self.search_origin.depth(0.65).go()
-        yield self.search_origin.forward(self.AFTER_FORWARD_METERS).go(speed=self.SEARCH_SPEED)
+        yield self.search_origin.depth(0.65).forward(self.AFTER_FORWARD_METERS).go(speed=self.SEARCH_SPEED)
         self.print_good('Done!')
 
 

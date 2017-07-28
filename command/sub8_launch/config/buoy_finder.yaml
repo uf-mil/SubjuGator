@@ -3,7 +3,7 @@ min_observations  : 8 # Observations needed to attempt a least squares position 
 min_contour_area  : 0.001 # Minimum of image area contour must be to not be rejected
 max_velocity      : 0.5  # Highest velocity sub can be moving as in m/s before observations are ignored
 max_circle_error  : 0.25  # Maximum error from CircleFinder.verify_contour
-min_trans         : 0.1 # Smallest movement of sub in meters between observations to count towards observation count
+min_trans         : 0.08 # Smallest movement of sub in meters between observations to count towards observation count
 timeout_seconds   : 4.0 # Time in which min_observations must be seen to be considered found
 roi_y             : 0.05 # Proportion of top of frame to crop off, to avoid surface reflection
 roi_height        : 0.1 # Proportion of bottom of frame to crop off, to avoid ground reflection/noise
