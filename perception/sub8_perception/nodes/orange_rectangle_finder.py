@@ -98,7 +98,7 @@ class OrangeRectangleFinder():
         self.image_sub = Image_Subscriber(camera, self._img_cb)
         self.camera_info = self.image_sub.wait_for_camera_info()
         assert self.camera_info is not None
-        self.debug_image = ImageMux(size=(self.camera_info.height, self.camera_info.width*2), shape=(1, 2))
+        self.debug_image = ImageMux(size=(self.camera_info.height, self.camera_info.width * 2), shape=(1, 2))
         self.cam = PinholeCameraModel()
         self.cam.fromCameraInfo(self.camera_info)
 

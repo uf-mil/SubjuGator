@@ -1,4 +1,5 @@
 <launch>
+  <rosparam file="$(find sub8_launch)/config/default_color_calibration.yaml" command="load" />
   <node pkg="sub8_perception" type="orange_rectangle_finder.py" name="orange_rectangle" ns="vision" output="log">
     <rosparam file="$(find sub8_launch)/config/orange_rectangle_finder.yaml" command="load" />
     <param name="do_3D" value="False" />

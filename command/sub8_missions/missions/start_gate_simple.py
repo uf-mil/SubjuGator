@@ -2,7 +2,8 @@ from txros import util
 from mil_misc_tools import text_effects
 
 FORWARD_METERS = 15.0
-SPEED=0.5
+SPEED = 0.5
+
 
 @util.cancellableInlineCallbacks
 def run(sub):
