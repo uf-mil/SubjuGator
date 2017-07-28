@@ -97,7 +97,10 @@ void Sub8NavigationGateDetector::determine_navigation_gate_position()
   }
   // If cameras are out of sync or not publishing, don't do anything
   if (!is_stereo_coherent())
+  {
+    gate_found_ = false;
     return;
+  }
 
   auto feature_pts_3d_ptr = get_3d_feature_points();
   if (!feature_pts_3d_ptr)

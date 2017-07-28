@@ -110,7 +110,6 @@ void Sub8StartGateDetector::determine_start_gate_position()
   auto pose_ptr = get_3d_pose(*feature_pts_3d_ptr);
   if (pose_ptr)
   {
-    std::cout << "found" << std::endl;
     auto pose = *pose_ptr;
     gate_pose_ = update_kalman_filter(pose);
     gate_found_ = true;

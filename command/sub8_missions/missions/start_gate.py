@@ -46,15 +46,14 @@ def run(sub):
     position = rosmsg_to_numpy(resp.pose.pose.position)
     orientation = rosmsg_to_numpy(resp.pose.pose.orientation)
 
-    fprint('Gate\'s position in map is: {}'.format(position))
-    fprint('Gate\'s orientation in map is: {}'.format(orientation))
-
     point_before = 0
     point_after = 0
 
     distance = np.linalg.norm(sub.pose.position - position)
-    while (distance > 1 or resp is not None or resp.found):
+    while (distance > 1 and resp is not None and resp.found):
 
+        fprint('Gate\'s position in map is: {}'.format(position))
+        fprint('Gate\'s orientation in map is: {}'.format(orientation))
         # Get the normal vector, which is assumed to be the [1,0,0] unit vector
         normal = tf.transformations.quaternion_matrix(
             orientation).dot(np.array([1, 0, 0, 0]))[0:3]
