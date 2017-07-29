@@ -146,15 +146,19 @@ class _PoseProxy(object):
             print "GOAL TOO HIGH"
             self._pos.position = -0.6
 
-    def go(self, *args, **kwargs):
-        if self.print_only:
-            print self._pose
-            return self._sub.nh.sleep(0.1)
-
+    @util.cancellableInlineCallbacks
+    def go(self, wait=0, **kwargs):
         self.check_goal()
 
-        goal = self._sub._moveto_action_client.send_goal(self._pose.as_MoveToGoal(*args, **kwargs))
-        return goal.get_result()
+        if self.print_only:
+            print self._pose
+            result = None
+        else:
+            goal = self._sub._moveto_action_client.send_goal(self._pose.as_MoveToGoal(**kwargs))
+            result = yield goal.get_result()
+        if wait > 0:
+            yield self._sub.nh.sleep(wait)
+        defer.returnValue(result)
 
     def go_trajectory(self, *args, **kwargs):
         traj = self._sub._trajectory_pub.publish(
