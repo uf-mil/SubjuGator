@@ -8,6 +8,7 @@
   <arg name="color_calibration" default="default_color_calibration.yaml" />
 
   <rosparam file="$(find sub8_launch)/config/course_geometry.yaml" />
+  <rosparam param="color" command="delete" />
   <rosparam file="$(find sub8_launch)/config/$(arg color_calibration)" />
 
   <group ns="vision">
