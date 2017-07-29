@@ -8,6 +8,7 @@ import start_gate
 import buoy
 import align_path_marker
 import navigation_gate
+import surface_octagon
 
 
 fprint = text_effects.FprintFactory(title="AUTO_MISSION").fprint
@@ -25,6 +26,7 @@ def do_mission(sub):
         yield buoy.run(sub)
         yield align_path_marker.run(sub)
         yield navigation_gate.run(sub)
+        yield surface_octagon.run(sub)
     except Exception as e:
         fprint("Error in Chain 1 missions!", msg_color="red")
         print e
