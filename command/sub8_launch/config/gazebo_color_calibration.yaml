@@ -10,6 +10,5 @@ color:
     yellow:
       LAB: [[0, 97, 160], [255, 115, 200]]
 
-  channel_marker:
-    hsv_low: [0.0, 0.0, 50.0]
-    hsv_high: [83.3782, 255.0, 255.0]
+  path_marker:
+      HSV: [[11, 0, 0], [13, 255, 255]]

@@ -18,7 +18,7 @@ shape_match_thresh: 0.666
 
 # <min_found_count> number of images where object is found within <timeout_seconds> to be considered found
 min_found_count: 10
-timeout_seconds: 2.0
+timeout_seconds: 3.0
 
 # True to provide 3d pose approximation service using PnP
 do_3D: True
