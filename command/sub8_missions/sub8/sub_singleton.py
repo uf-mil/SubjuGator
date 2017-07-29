@@ -324,8 +324,6 @@ class Searcher(object):
         looker.cancel()
         searcher.cancel()
 
-        yield start_pose.go()
-
     @util.cancellableInlineCallbacks
     def _run_search_pattern(self, loop, speed, pause):
         '''
