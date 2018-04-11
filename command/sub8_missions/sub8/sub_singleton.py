@@ -13,7 +13,7 @@ from mil_msgs.srv import SetGeometry, SetGeometryRequest
 from sub8_msgs.srv import SetValve, SetValveRequest
 from std_srvs.srv import SetBool, SetBoolRequest
 from nav_msgs.msg import Odometry
-from tf.transformations import quaternion_multiply, quaternion_from_euler
+
 
 import numpy as np
 from twisted.internet import defer
@@ -146,15 +146,19 @@ class _PoseProxy(object):
             print "GOAL TOO HIGH"
             self._pos.position = -0.6
 
-    def go(self, *args, **kwargs):
-        if self.print_only:
-            print self._pose
-            return self._sub.nh.sleep(0.1)
-
+    @util.cancellableInlineCallbacks
+    def go(self, wait=0, **kwargs):
         self.check_goal()
 
-        goal = self._sub._moveto_action_client.send_goal(self._pose.as_MoveToGoal(*args, **kwargs))
-        return goal.get_result()
+        if self.print_only:
+            print self._pose
+            result = None
+        else:
+            goal = self._sub._moveto_action_client.send_goal(self._pose.as_MoveToGoal(**kwargs))
+            result = yield goal.get_result()
+        if wait > 0:
+            yield self._sub.nh.sleep(wait)
+        defer.returnValue(result)
 
     def go_trajectory(self, *args, **kwargs):
         traj = self._sub._trajectory_pub.publish(
@@ -292,10 +296,17 @@ class Searcher(object):
             # Handle error
 
     @util.cancellableInlineCallbacks
-    def start_search(self, timeout=60, loop=True, spotings_req=2, speed=.1):
+    def start_search(self, timeout=60, loop=True, spotings_req=2, speed=.1, pause=0.0):
+        '''
+        @param timeout: time in seconds after which to cancel search
+        @param loop: If true, repeat pattern moves until object is found or timeout ends
+        @param spottings_req: Number of found == True's needed to stop search
+        @param speed: speed paramater to pass to each search move
+        @param pause: time in seconds to pause after each search move
+        '''
         print "SERACHER - Starting."
         looker = self._run_look(spotings_req).addErrback(self.catch_error)
-        searcher = self._run_search_pattern(loop, speed).addErrback(self.catch_error)
+        searcher = self._run_search_pattern(loop, speed, pause).addErrback(self.catch_error)
 
         start_pose = self.sub.move.forward(0)
         start_time = self.sub.nh.get_time()
@@ -313,10 +324,8 @@ class Searcher(object):
         looker.cancel()
         searcher.cancel()
 
-        yield start_pose.go()
-
     @util.cancellableInlineCallbacks
-    def _run_search_pattern(self, loop, speed):
+    def _run_search_pattern(self, loop, speed, pause):
         '''
         Look around using the search pattern.
         If `loop` is true, then keep iterating over the list until timeout is reached or we find it.
@@ -328,6 +337,8 @@ class Searcher(object):
                     print "SEARCHER - going to next position."
                     if type(pose) == list or type(pose) == np.ndarray:
                         yield self.sub.move.relative(pose).go(speed=speed)
+                        if pause > 0:
+                            yield self.sub.nh.sleep(pause)
                     else:
                         yield pose.go()
 

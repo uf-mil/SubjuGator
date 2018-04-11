@@ -4,7 +4,13 @@ from ros_alarms import TxAlarmListener, TxAlarmBroadcaster
 from mil_misc_tools import text_effects
 
 # Import missions here
+import start_gate
 import start_gate_simple
+import buoy
+import align_path_marker
+import go_to_pinger
+import surface
+import navigation_gate
 
 
 fprint = text_effects.FprintFactory(title="AUTO_MISSION").fprint
@@ -18,6 +24,12 @@ def do_mission(sub):
     # Chain 1 missions
     try:
         yield start_gate_simple.run(sub)
+        yield align_path_marker.run(sub)
+        yield buoy.run(sub)
+        yield align_path_marker.run(sub)
+        yield navigation_gate.run(sub)
+        #yield go_to_pinger.run(sub)
+        #yield surface.run(sub)
     except Exception as e:
         fprint("Error in Chain 1 missions!", msg_color="red")
         print e

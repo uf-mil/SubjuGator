@@ -63,7 +63,7 @@ class Kill(HandlerBase):
 
         # If we lose network but don't want to go autonomous
         if sub_alarms["network-loss"].raised and not rospy.get_param("/autonomous", False):
-            return True
+            return False
         ignore.append("network-loss")
 
         # Severity level of 3 means too many thrusters out (3 thrusters out)
