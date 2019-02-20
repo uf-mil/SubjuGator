@@ -6,6 +6,9 @@ import genpy
 
 # Import missions here
 import pinger
+import start_gate_guess
+import dice
+import roulette_wheel
 
 
 fprint = text_effects.FprintFactory(title="AUTO_MISSION").fprint
@@ -34,19 +37,23 @@ def do_mission(sub):
 
     # Chain 1 missions
     try:
-        completed = yield run_mission(sub, pinger, 400)
+        gate_res = yield run_mission(sub, start_gate_guess, 200)
+        dice_res = yield run_mission(sub, dice, 420)
+        completed = yield run_mission(sub, pinger, 360)
         if not completed:  # if we timeout
             pass
         else:
             if (yield sub.nh.has_param('pinger_where')):
                 if (yield sub.nh.get_param('pinger_where')) == 0:
                     fprint('Running roulette')
-                    # do roulette
+                   # do roulette
                     pass
                 if (yield sub.nh.get_param('pinger_where')) == 1:
                     fprint('Running cash in')
                     # do cash in challenge
                     pass
+
+        wheel = yield run_mission(sub, roulette_wheel, 420)
 
     except Exception as e:
         fprint("Error in Chain 1 missions!", msg_color="red")

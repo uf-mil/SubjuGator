@@ -13,13 +13,14 @@ on enable, and close it on disable.
 '''
 
 # Exec names without the .py
-exec_names = ['dice_detection', 'path_localizer']
+exec_names = ['dice_detection', 'path_localizer', 'roulette_wheel']
 
 # Store subprocesses in global
 alive_processes = {}
 
 
 class launcher(object):
+
     def __init__(self, name):
         '''
         Object to store service threads and name of executable

@@ -16,4 +16,6 @@
       <rosparam file="$(find sub8_launch)/config/path_localizer.yaml" command="load" />
     </node>
   </group>
+
+    <node pkg="sub8_perception" type="CLAHE_Processing.py" name="CLAHE" />
 </launch>

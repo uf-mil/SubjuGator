@@ -30,12 +30,12 @@ dropper:
   ports:
     open_port:
       # Drops
-      id: 3
+      id: 4
       default: 0
     close_port:
       # Reloads
-      id: 4
-      default: 1
+      id: -1
+      default: 0
   pulse_time: 1
 
 gripper:

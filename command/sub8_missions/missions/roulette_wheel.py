@@ -7,7 +7,8 @@ import visualization_msgs.msg as visualization_msgs
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import Point, Vector3
 from mil_misc_tools import FprintFactory
-
+from sub8_msgs.srv import GuessRequest, GuessRequestRequest
+import mil_ros_tools
 MISSION = 'Roulette Challenge'
 
 
@@ -32,8 +33,9 @@ class DropTheBall(object):
     Its goal is to search for a target on the torpedo board and fire at it.
     '''
     TIMEOUT_SECONDS = 30
-    X_PATTERN_RADIUS = 1.0
-    Y_PATTERN_RADIUS = 1.0
+    X_PATTERN_RADIUS = 0.01
+    Y_PATTERN_RADIUS = 0.01
+    scale = 1
     BACKUP_METERS = 3.0
     BLIND = True
 
@@ -56,8 +58,9 @@ class DropTheBall(object):
         self.generate_pattern()
 
     def generate_pattern(self):
-        z = self.X_PATTERN_RADIUS
+        x = self.X_PATTERN_RADIUS
         y = self.Y_PATTERN_RADIUS
+        s = self.scale
         self.moves = [[0, s * y, 0], [s * x, 0, 0], [0, s * -2 * y, 0],
                       [-2 * x * s, 0, 0], [0, s * y, 0], [s * x, 0, 0]]
         self.move_index = 0
@@ -79,7 +82,7 @@ class DropTheBall(object):
             come once we confirm we can actually unblock currently blocked
             targets.
             '''
-            res = yield self.sub.vision_proxies.arm_torpedos.get_pose(
+            res = yield self.sub.vision_proxies.roulette_wheel.get_pose(
                 target='roulette_wheel')
             if res.found:
                 self.ltime = res.pose.header.stamp
@@ -104,9 +107,10 @@ class DropTheBall(object):
             self.print_info(info)
 
     @util.cancellableInlineCallbacks
-    def pattern(self):        
-    	
-    	self.print_info('Descending to Depth...')
+    def pattern(self):
+        self.pattern_done = False
+
+        self.print_info('Descending to Depth...')
         yield self.sub.move.depth(1.5).go(blind=self.BLIND, speed=0.1)
 
         def err():
@@ -114,7 +118,8 @@ class DropTheBall(object):
 
         self.pattern_done = False
         for i, move in enumerate(self.moves[self.move_index:]):
-            move = self.sub.move.relative(np.array(move)).go(blind=self.BLIND, speed=0.1)
+            move = self.sub.move.relative(np.array(move)).go(
+                blind=self.BLIND, speed=0.1)
             move.addErrback(err)
             yield move
             self.move_index = i + 1
@@ -128,16 +133,16 @@ class DropTheBall(object):
         yield self.sub.move.go(blind=self.BLIND, speed=0.1)  # Station hold
         transform = yield self.sub._tf_listener.get_transform('/map', '/base_link')
         target_position = transform._q_mat.dot(
-                target_pose - transform._p)
+            target_pose - transform._p)
 
         sub_pos = yield self.sub.tx_pose()
         # print('Current Sub Position: ', sub_pos)
 
         # sub_pos = transform._q_mat.dot(
-                # (sub_pos[0]) - transform._p)
+        # (sub_pos[0]) - transform._p)
         # target_position = target_position - sub_pos[0]
         # yield self.sub.move.look_at_without_pitching(target_position).go(
-            # blind=self.BLIND, speed=.1)
+        # blind=self.BLIND, speed=.1)
         # print('Map Position: ', target_position)
         yield self.sub.move.relative(np.array([0, target_position[1], 0])).go(blind=True, speed=.1)
         yield self.sub.move.relative(np.array([target_position[0], 0, 0])).go(
@@ -148,6 +153,7 @@ class DropTheBall(object):
             format(target))
         sub_pos = yield self.sub.tx_pose()
         print('Current Sub Position: ', sub_pos)
+        yield self.sub.actuators.drop_marker()
         yield self.sub.actuators.drop_marker()
         self.done = True
 
@@ -174,6 +180,12 @@ class DropTheBall(object):
 
     @util.cancellableInlineCallbacks
     def run(self):
+        wheel_txros = yield self.sub.nh.get_service_client('/guess_location',
+                                                      GuessRequest)
+        wheel_req = yield wheel_txros(GuessRequestRequest(item='pinger1'))
+        wheel = mil_ros_tools.rosmsg_to_numpy(
+            wheel_req.location.pose.position)
+        yield self.sub.move.set_position(wheel).depth(2).go(speed=0.1, blind=True)
         # start_time = yield self.sub.nh.get_time()  # Store time mission
         # starts for timeout
 
@@ -190,9 +202,13 @@ class DropTheBall(object):
                 yield self.fire(t)
                 self.targets[t].set_destroyed()
                 if not self.done:
+                    self.scale += 1
                     pattern = self.pattern()
-            elif self.pattern_done:
-                break
+            elif (not self.done) and (self.pattern_done):
+                self.print_info("Increasing search radius...")
+                self.scale += 1
+                self.generate_pattern()
+                pattern = self.pattern()
             yield self.sub.nh.sleep(0.1)
         search.cancel()
         pattern.cancel()

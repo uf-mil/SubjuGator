@@ -47,7 +47,8 @@ class classifier(object):
             cv_image = self.bridge.imgmsg_to_cv2(data, 'bgr8')
         except CvBridgeError as e:
             print(e)
-
+        im_width = cv_image.shape[1]
+        im_height = cv_image.shape[0]
         cv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
 
         # Run image through tensorflow graph
@@ -78,10 +79,10 @@ class classifier(object):
 
         for i in range(self.num_objects_detect):
             if (scores[i] > self.score_thresh):
-                (left, right, top, bottom) = (boxes[i][1] * self.im_width,
-                                              boxes[i][3] * self.im_width,
-                                              boxes[i][0] * self.im_height,
-                                              boxes[i][2] * self.im_height)
+                (left, right, top, bottom) = (boxes[i][1] * im_width,
+                                              boxes[i][3] * im_width,
+                                              boxes[i][0] * im_height,
+                                              boxes[i][2] * im_height)
                 # top left corner of bbox
                 p1 = np.array([int(left), int(top)])
                 # bottom right corner of bbox

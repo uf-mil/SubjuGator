@@ -13,11 +13,11 @@ from geometry_msgs.msg import Point, Vector3
 fprint = text_effects.FprintFactory(title="PINGER", msg_color="cyan").fprint
 
 SPEED = 0.1
-FREQUENCY = 30000
+FREQUENCY = 40000
 FREQUENCY_TOL = 3000
 
 PINGER_HEIGHT = 1.5  # how high to go above pinger after found
-MOVE_AT_DEPTH = 1.5  # how low to swim and move
+MOVE_AT_DEPTH = 2  # how low to swim and move
 
 POSITION_TOL = 0.05  # how close to pinger before quiting
 

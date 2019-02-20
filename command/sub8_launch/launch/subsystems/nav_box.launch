@@ -1,7 +1,7 @@
 <launch>
-  <arg name="dvl" default="false" />
-  <arg name="imu" default="false" />
-  <arg name="depth" default="false" />
+  <arg name="dvl" default="True" />
+  <arg name="imu" default="True" />
+  <arg name="depth" default="True" />
 
   <!-- DVL -->
   <group if="$(arg dvl)">

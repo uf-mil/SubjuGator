@@ -9,7 +9,7 @@ from utils import label_map_util
 rospack = rospkg.RosPack()
 TRAINED_MODEL_DIR = rospack.get_path('sub8_perception') + '/ml_classifiers/dice'
 # Path to frozen detection graph. This is the actual model+weights that is used for the object detection.
-PATH_TO_CKPT = TRAINED_MODEL_DIR + '/frozen_graphs/faster_rcnn_243_dice_v2/frozen_inference_graph.pb'
+PATH_TO_CKPT = TRAINED_MODEL_DIR + '/frozen_graphs/frcnn_dice_v1/frozen_inference_graph.pb'
 # List of the strings that is used to add correct label for each box.
 PATH_TO_LABELS = TRAINED_MODEL_DIR + '/frozen_graphs/dice_labelmap.pbtxt'
 
@@ -55,7 +55,7 @@ def draw_box_on_image(num_objects_detect, score_thresh, scores, boxes, classes,
             cv2.rectangle(image_np, p1, p2, (0, 255, 0), 3, 1)
 
             cv2.putText(image_np,
-                        'confidence: ' + str("{0:.2f}".format(scores[i])),
+                        'confidence: ' + str("{0:.2f}".format(scores[i])) + ' class {}'.format(classes[i]),
                         (int(left), int(top) - 20), cv2.FONT_HERSHEY_SIMPLEX,
                         0.5, (0, 255, 0), 2)
 

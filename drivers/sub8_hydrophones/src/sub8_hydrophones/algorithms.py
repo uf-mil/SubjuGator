@@ -29,7 +29,7 @@ def run(samples, sample_rate, v_sound, dist_h, dist_h4):
         errors.append('Low amplitude at maximum frequency')
     if template_pos is None:
         errors.append('Failed to find template')
-    elif numpy.max(delta_errors) > 1e-3:
+    elif numpy.max(delta_errors) > 1e-2:
         errors.append('High template match error (%s)' % str(delta_errors))
 
     return dict(
@@ -123,7 +123,7 @@ def compute_deltas(samples,
     """
     period = int(round(sample_rate / ping_freq))
     template_width = period * template_periods + 1
-    template, template_pos = make_template(samples[0, :], .2, template_width)
+    template, template_pos = make_template(samples[0, :], .05, template_width)
     if template_pos is None:
         return numpy.empty(0), numpy.empty(0), None, template_width
     start = template_pos - period // 2

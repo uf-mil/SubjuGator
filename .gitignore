@@ -76,4 +76,5 @@ pedometry.txt
 *~
 
 # Vim swaps
-*.swp
+*.sw*
+*.save*

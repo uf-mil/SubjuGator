@@ -9,7 +9,7 @@ fprint = text_effects.FprintFactory(title="PINGER", msg_color="cyan").fprint
 SPEED = 0.2
 DOWN_SPEED = 0.1
 
-DOWN = 1.5
+DOWN = 1.2
 
 
 @util.cancellableInlineCallbacks
@@ -31,9 +31,14 @@ def run(sub):
     fprint('Found mid {}'.format(mid))
 
     fprint('Looking at gate')
-    yield sub.move.down(DOWN).set_orientation(sub_start_orientation).go(
-        speed=DOWN_SPEED)
+    start = sub.move.down(DOWN).set_orientation(sub_start_orientation)
+    yield start.go(speed=DOWN_SPEED)
+    yield start.right(1).go(speed=DOWN_SPEED)
     yield sub.move.look_at_without_pitching(mid).go(speed=DOWN_SPEED)
 
+    yield sub.nh.sleep(2)
+
     fprint('Going!')
-    yield sub.move.set_position(mid).depth(DOWN).go(speed=SPEED)
+    where = sub.move.set_position(mid).depth(DOWN)
+    yield where.go(speed=SPEED)
+    yield where.forward(2).zero_roll_and_pitch().go(speed=SPEED)

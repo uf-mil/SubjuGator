@@ -8,7 +8,7 @@ import numpy as np
 import rospy
 from std_msgs.msg import Header
 from collections import deque
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import CameraInfo, Image
 from cv_bridge import CvBridgeError
 from sub8_vision_tools import MultiObservation
 from image_geometry import PinholeCameraModel
@@ -60,8 +60,10 @@ class CLAHE_generator:
         self.camera_model.fromCameraInfo(self.camera_info)
         self.frame_id = self.camera_model.tfFrame()
 
-        self.image_pub = Image_Publisher("CLAHE/debug")
-
+        self.image_pub = Image_Publisher("CLAHE/left/image")
+        # self.transform_pub =
+        self.camera_info_pub = rospy.Publisher(
+            'CLAHE/left/camera_info', CameraInfo, queue_size=1)
         # Debug
         self.debug = rospy.get_param('~debug', True)
 
@@ -81,7 +83,6 @@ class CLAHE_generator:
 
         self.last_image_time = self.image_sub.last_image_time
         self.CLAHE(image)
-        print('published')
 
     def CLAHE(self, cv_image):
         '''
@@ -100,7 +101,9 @@ class CLAHE_generator:
         lab = cv2.merge((l2, a, b))  # merge channels
         cv_image = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
 
-        self.image_pub.publish(cv_image)
+        self.image_pub.publish(cv_image, frame_id='front_left_cam')
+        self.camera_info_pub.publish(self.camera_info)
+        print('published')
 
 
 def main(args):
