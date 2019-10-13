@@ -1,3 +1,0 @@
-# Tell thruster driver and mapper not to use this thruster even if available
-string thruster_name
----
